@@ -66,10 +66,10 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
  	methods (TestClassSetup)
 		function setupFung2013(this)
  			import mlvg.*;
-            this.anatPath = '/Users/jjlee/Singularity/CCIR_01211/sourcedata/sub-108293/anat';
-            this.petPath = '/Users/jjlee/Singularity/CCIR_01211/sourcedata/sub-108293/pet';
+            this.anatPath = '~jjlee/Singularity/CCIR_01211/sourcedata/sub-108293/anat';
+            this.petPath = '~jjlee/Singularity/CCIR_01211/sourcedata/sub-108293/pet';
             cd(this.petPath)
-            %cd('/Users/jjlee/Singularity/subjects/sub-S58163/resampling_restricted')            
+            %cd('~jjlee/Singularity/subjects/sub-S58163/resampling_restricted')            
             %this.corners = [113 178 140; 87 178 140; 136 149 58; 62 148 59] + 1; % long
             this.corners = [140 144 109; 60 144 105; 136 149 58; 62 148 59] + 1; % short
             %this.corners = [158 122 85; 96 126 88; 156 116 27; 101 113 28]; % PPG
