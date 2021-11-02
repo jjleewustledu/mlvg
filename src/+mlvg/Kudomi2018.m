@@ -17,6 +17,7 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
         diagonal_only
         dt
         Nsafeparc % # of voxels in safeparc
+        Nskip
         Nx % # of regional samples
         safeparc % mlfourd.ImagingContext2
         scanner
@@ -27,6 +28,7 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
     end
     
     properties (Dependent)
+        mu
         Nt
         p
         times
@@ -39,6 +41,9 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
         
         %% GET
         
+        function g = get.mu(this)
+            g = 1/0.95 + this.ALPHA;
+        end
         function g = get.Nt(this)
             g = length(this.times);
         end
@@ -125,10 +130,10 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
                 arr = this.drho_dt_cache;
                 return
             end
-            this.drho_dt_cache = diff(this.rho, 1, 2)/this.dt; % 1st deriv of time
-            time_boundary = this.drho_dt_cache(:,1) + rand(size(this.drho_dt_cache,1),1)*dipmin(this.drho_dt_cache);
-            this.drho_dt_cache = [time_boundary this.drho_dt_cache]; % preserve this.Nt with jitter
-            this.drho_dt_cache = this.drho_dt_cache*this.voxelVolume; % Bq/s
+            smoothed = smoothdata(this.rho(), 'sgolay', 2);
+            this.drho_dt_cache = diff(smoothed, 1, 2)/this.dt; % 1st deriv of time
+            time_boundary1 = this.drho_dt_cache(:,1);
+            this.drho_dt_cache = [time_boundary1 this.drho_dt_cache]; % preserve this.Nt without jitter
             arr = this.drho_dt_cache;
         end
         function arr = d2rho_dt2(this)
@@ -136,14 +141,28 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
                 arr = this.d2rho_dt2_cache;
                 return
             end
-            this.d2rho_dt2_cache = diff(this.rho, 2, 2)/this.dt^2; % 1st deriv of time
-            time_boundary = this.d2rho_dt2_cache(:,1) + rand(size(this.d2rho_dt2_cache,1),1)*dipmin(this.d2rho_dt2_cache);
-            this.d2rho_dt2_cache = [time_boundary time_boundary this.d2rho_dt2_cache]; % preserve this.Nt with jitter
-            this.d2rho_dt2_cache = this.d2rho_dt2_cache*this.voxelVolume; % Bq/s
+            cache = diff(this.rho(), 2, 2)/this.dt^2; % 2nd deriv of time
+            time_boundary1 = cache(:,1);
+            time_boundaryN = cache(:,end);
+            cache = [time_boundary1 cache time_boundaryN]; % preserve this.Nt without jitter
+            this.d2rho_dt2_cache = smoothdata(cache, 'movmean', 2);
             arr = this.d2rho_dt2_cache;
         end
         function arr = K1(this)
             arr = 1./diag(this.X());
+        end
+        function [arr,arr_] = Kvariation(this)
+            %% solves \qty[ \mu^2 \rho(x) ]_{N_x \times N_t} = 
+            %         \qty[K^{-2}(\vec{x})]_{N_x \times N_x} \qty[ \partial^2_t \rho(x) ]_{N_x \times N_t}. 
+            %  @return arr ~ K(\vec{x}).
+            %  @return arr_ ~ K^{-2}(\vec{x}).
+            
+            % solve XA = B
+            %arr_ = this.mu^2 * this.rho() .* pinv(this.d2rho_dt2(), this.tol);
+            %arr_ = this.mu^2 * this.rho() / this.d2rho_dt2();
+            arr_ = lsqminnorm(this.d2rho_dt2()', this.mu^2 * this.rho()')';
+            arr = sqrt(1 ./ arr_);
+            arr = real(arr);
         end
         function arr = rho(this)
             if ~isempty(this.rho_cache)
@@ -158,10 +177,16 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
             this.rho_cache = zeros(this.Nx, this.Nt);
             for x = 1:size(this.rho_cache, 1)
                 smoothed = smoothdata(activityDensityArr(x,:), 'sgolay');
-                this.rho_cache(x,:) = interp1(this.timesMid, smoothed, this.times, 'makima');
+                interpolated = interp1(this.timesMid, smoothed, this.times, 'makima');
+                interpolated(interpolated < 0) = 0;
+                interpolated(1:this.Nskip) = 0;
+                this.rho_cache(x,:) = interpolated;
             end
             this.rho_cache = this.rho_cache*this.voxelVolume; % Bq
             arr = this.rho_cache;
+        end
+        function arr = rho_inv(this)
+            arr = pinv(this.rho, this.tol);
         end
         function arr = X(this)
             if ~isempty(this.X_cache)
@@ -171,7 +196,9 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
             if this.diagonal_only
                 this.X_cache = diag(diag(this.B)./diag(this.A));
             else
-                this.X_cache = pinv(this.A, this.tol) .* this.B;
+                %this.X_cache = this.B .* pinv(this.A, this.tol);
+                this.X_cache = this.B/this.A;
+                %this.X_cache = lsqminnorm(this.A', this.B')'; % solve XA = B
             end
             arr = this.X_cache;
         end
@@ -187,7 +214,8 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
             addParameter(ip, 'blur', 9, @isnumeric)
             addParameter(ip, 'diagonal_only', false, @islogical)
             addParameter(ip, 'dt', 2, @isscalar)
-            addParameter(ip, 'Nx', 100, @isscalar)
+            addParameter(ip, 'Nskip', 5, @isscalar)
+            addParameter(ip, 'Nx', [], @isnumeric)
             addParameter(ip, 'sessionData', [], @(x) isa(x, 'mlpipeline.ISessionData'))
             addParameter(ip, 'thresh', 0.1, @(x) isscalar(x) && x < 1)
             addParameter(ip, 'time0', [], @isnumeric)
@@ -206,11 +234,6 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
             this.scanner = devkit.buildScannerDevice();
             %this.scanner.decayCorrect();
             this.buildSafeparc();
-            if ~isempty(ipr.Nx)
-                this.Nx = ipr.Nx;
-            else
-                this.Nx = this.Nsafeparc;
-            end
             if ~isempty(ipr.time0)
                 this.time0 = ipr.time0;
             else
@@ -220,6 +243,12 @@ classdef Kudomi2018 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyabl
                 this.timeF = ipr.timeF;
             else
                 this.timeF = this.scanner.timesMid(end);
+            end
+            this.Nskip = ipr.Nskip;
+            if ~isempty(ipr.Nx)
+                this.Nx = ipr.Nx;
+            else
+                this.Nx = this.Nt;
             end
  		end
     end 

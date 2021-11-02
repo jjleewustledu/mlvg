@@ -11,15 +11,15 @@ classdef Test_Kudomi2018 < matlab.unittest.TestCase
  	%% It was developed on Matlab 9.10.0.1669831 (R2021a) Update 2 for MACI64.  Copyright 2021 John Joowon Lee.
  	
 	properties
-        blur = 9
+        blur = 4.3
         diagonal_only = false
         dt = 1
-        Nx = 400
+        Nx = []
  		registry
         sessd
  		testObj
-        time0 = 25
-        timeF = 120
+        time0 = 0
+        timeF = 500
         tol = []
  	end
 
@@ -70,9 +70,18 @@ classdef Test_Kudomi2018 < matlab.unittest.TestCase
             rho = this.testObj.rho();
             drho_dt = this.testObj.drho_dt();
             d2rho_dt2 = this.testObj.d2rho_dt2();
+            [Kvar,Kvar_] = this.testObj.Kvariation();
+            
             figure; imagesc(rho)
             figure; imagesc(drho_dt)
             figure; imagesc(d2rho_dt2)
+            figure; imagesc(Kvar)
+            figure; imagesc(Kvar_)
+            figure; plot(rho(50,:))
+            figure; plot(drho_dt(50,:))
+            figure; plot(d2rho_dt2(50,:))
+            figure; plot(mean(Kvar,1))
+            figure; plot(mean(Kvar_,1))
             disp(this.testObj)
         end
         function test_X(this)
