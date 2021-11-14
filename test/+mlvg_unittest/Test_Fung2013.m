@@ -12,12 +12,14 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
  	
 	properties
         anatPath
-        cacheMat
+        cacheMat % assign after segmentations, centerlines, registration targets are ready
         corners
         ho
         ho_sumt
         petPath
  		registry
+        sourceAnatPath
+        sourcePetPath
         t1w
  		testObj
  	end
@@ -29,17 +31,28 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
         function test_cache(this)
             disp(this.testObj)
         end
+        function test_buildSegmentation(this)
+            this.testObj.buildSegmentation(100, 'smoothFactor', 0);
+            disp(this.testObj)
+        end
 		function test_buildCenterlines(this)
-            f = this.testObj;
-            f.buildCorners(this.corners);            
+            f = this.testObj;        
             f.buildSegmentation(130, 'smoothFactor', 0);
             f.buildCenterlines()
         end
-        function test_registerCenterline(this) 
+        function test_registerCenterline_cpd(this) 
+            assert(~isempty(this.cacheMat), 'testObj needs some aufbau to proceed with testing')
             f = this.testObj;          
             f.registerCenterline(f.centerlines_pcs{1}, 'alg', 'cpd', 'laterality', 'L')
             disp(f)
-            disp(f.registration)            
+            disp(f.registration)
+        end
+        function test_registerCenterline_fung(this) 
+            assert(~isempty(this.cacheMat), 'testObj needs some aufbau to proceed with testing')
+            testObj = this.testObj;          
+            testObj.registerCenterline(testObj.centerlines_pcs{1}, 'alg', 'fung', 'laterality', 'L');
+            disp(testObj)
+            disp(testObj.registration)
         end
         function test_pointCloudToIC(this)
             f = this.testObj;
@@ -48,38 +61,49 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
             ic = ic.imdilate(strel('sphere', 2));
             ic.fsleyes
         end
-        function test_call0(this)            
-            this.testObj.buildCorners(this.corners);
-            this.testObj.buildSegmentation(100, 'smoothFactor', 0);
-            this.testObj.buildCenterlines()
-            disp(this.testObj)
+        function test_decay_uncorrected(this)
+            obj = this.testObj;
+            mask = mlfourd.ImagingContext2('~jjlee/Singularity/CCIR_01211/derivatives/sub-108293/mri/wmparc_on_T1w.nii.gz');
+            ho_ = this.ho.volumeAveraged(mask);
+            ho_row = obj.decay_uncorrected(ho_);
+            plot(obj.timesMid('HO'), ho_row, obj.timesMid('HO'), ho_.nifti.img)
+            legend('decay uncorrected', 'decay corrected')
+        end
+        function test_tracername(this)
+            for g = globT(fullfile(this.petPath, 'sub-*Dynamic*_on_T1w.nii.gz'))
+                fprintf('%s contains %s\n', g{1}, this.testObj.tracername(g{1}))
+            end
         end
         function test_call(this)
-            [ics,icrefs] = this.testObj.call();
+            [~,ics] = this.testObj.call();
             disp(ics)
-            for i = 1:length(ics)
-                ics{i}.fsleyes(this.t1w.fqfilename, icrefs{i}.fqfilename)
-            end
+%             for i = 1:length(ics)
+%                 ics{i}.fsleyes(this.t1w.fqfilename, ics{i}.fqfilename)
+%             end
         end
 	end
 
  	methods (TestClassSetup)
 		function setupFung2013(this)
  			import mlvg.*;
-            this.anatPath = '~jjlee/Singularity/CCIR_01211/sourcedata/sub-108293/anat';
-            this.petPath = '~jjlee/Singularity/CCIR_01211/sourcedata/sub-108293/pet';
-            cd(this.petPath)
-            %cd('~jjlee/Singularity/subjects/sub-S58163/resampling_restricted')            
-            %this.corners = [113 178 140; 87 178 140; 136 149 58; 62 148 59] + 1; % long
-            this.corners = [140 144 109; 60 144 105; 136 149 58; 62 148 59] + 1; % short
+            this.anatPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/derivatives/sub-108293/anat');
+            this.petPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/derivatives/sub-108293/pet');
+            this.sourceAnatPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/sourcedata/sub-108293/anat');
+            this.sourcePetPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/sourcedata/sub-108293/pet');
+            %this.sourcePetPath = fullfile(getenv('HOME'), 'Singularity/subjects/sub-S58163/resampling_restricted');
+            cd(this.petPath)         
+            %this.corners = [113 178 140; 87 178 140; 136 149 58; 62 148 59] + 1; % long vglab
+            this.corners = [140 144 109; 60 144 105; 136 149 58; 62 148 59] + 1; % short vglab
             %this.corners = [158 122 85; 96 126 88; 156 116 27; 101 113 28]; % PPG
  			%this.testObj_ = Fung2013('coords', this.corners, 'plotmore', true, 'iterations', 1000, 'smoothFactor', 0.1, 'BBBuf', [10 10 4]);
- 			this.testObj_ = Fung2013('coords', this.corners, 'plotmore', true, 'iterations', 100, 'BBBuf', [4 4 4]);
-            this.t1w = mlfourd.ImagingContext2(fullfile(this.anatPath, 'sub-108293_20210218081030_T1w.nii.gz'));
-            this.ho = mlfourd.ImagingContext2('sub-108293_20210421134537_Water_Dynamic_13_on_T1w.nii.gz');
-            this.ho_sumt = mlfourd.ImagingContext2('sub-108293_20210421134537_Water_Static_12_on_T1w.nii.gz');
-            %this.ho = mlfourd.ImagingContext2('hodt20190523120249_on_T1001.nii.gz');
-            %this.cacheMat = fullfile(getenv('HOME'), 'MATLAB-Drive', 'mlvg', 'test', '+mlvg_unittest', 'Test_Fung2013_20210512.mat');
+ 			this.testObj_ = Fung2013('coords', this.corners, 'iterations', 100);
+            this.t1w = mlfourd.ImagingContext2(fullfile(this.sourceAnatPath, 'sub-108293_20210218081030_T1w.nii.gz'));
+            this.ho = mlfourd.ImagingContext2(fullfile(this.petPath, 'sub-108293_20210421134537_Water_Dynamic_13_on_T1w.nii.gz'));
+            %this.ho = mlfourd.ImagingContext2(fullfile(this.petPath, 'hodt20190523120249_on_T1001.nii.gz'));
+            this.ho_sumt = mlfourd.ImagingContext2(fullfile(this.petPath, 'sub-108293_20210421134537_Water_Static_12_on_T1w.nii.gz'));
+            %this.ho_sumt = mlfourd.ImagingContext2(fullfile(this.petPath, 'hodt20190523120249_on_T1001_avgt.nii.gz'));
+            %this.cacheMat = fullfile(getenv('HOME'), 'MATLAB-Drive', 'mlvg', 'test', '+mlvg_unittest', 'Test_Fung2013_Vision_20211109.mat');
+            %this.cacheMat = fullfile(getenv('HOME'), 'MATLAB-Drive', 'mlvg', 'test', '+mlvg_unittest', 'Test_Fung2013_PPG_20211109.mat');
  		end
 	end
 
@@ -96,10 +120,13 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
                 return
             end
             this.testObj = copy(this.testObj_);
-            this.testObj.buildCorners(this.corners);
             this.testObj.buildSegmentation();
             this.testObj.buildCenterlines()                
             this.testObj.buildRegistrationTargets(this.ho)
+            if ~isfile(this.cacheMat)
+                testObj = this.testObj; %#ok<PROP> 
+                save(this.cacheMat, 'testObj')
+            end
  		end
 	end
 

@@ -3,6 +3,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
     %  Edward K Fung and Richard E Carson.  Cerebral blood flow with [15O]water PET studies using 
     %  an image-derived input function and MR-defined carotid centerlines.  
     %  Phys. Med. Biol. 58 (2013) 1903–1923.  doi:10.1088/0031-9155/58/6/1903
+    %  See also:  mlvg.Registration, mlvg.Reregistration
     
     %  $Revision$
  	%  was created 22-Mar-2021 22:11:00 by jjlee,
@@ -10,27 +11,34 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
  	%% It was developed on Matlab 9.9.0.1592791 (R2020b) Update 5 for MACI64.  Copyright 2021 John Joowon Lee.
     
     properties
+        alg = 'fung' % prefer 'fung'; try 'cpd'
         BBBuf % extra voxels padded to coords to create convex bounding box
-        T1w_ic
         centerlines_ics % L, R in cell
         centerlines_pcs % L, R in cell
         coords % 4 points at corners
         coords_bb % {x1:xN, y1:yN, z1:zN} for bounding box
         corners_ic
         cornersb_ic
+        dilationRadius = 2 % Fung reported best results with radius ~ 2.5, but integers may be faster
+        dyn_fileprefix % fileprefix for PET
+        dyn_label % label for PET, useful for figures
+        it10
+        it25
+        it50
+        it75
+        plotdebug % show debugging plots
         plotmore % show more plots for QA
         ploton % show final results
         registration % struct
             % tform
             % centerlineOnTarget
             % rmse 
-            % targets are averages of frames containing 10-25 pcnt, 10-50 pcnt, 10-75 pcnt of max emissions
-        reregistration % struct
-            % tform
-            % centerlineOnTarget
-            % reward 
-            % targets are averages of frames containing 10-25 pcnt, 10-50 pcnt, 10-75 pcnt of max emissions
+            % target_ics are averages of frames containing 10-25 pcnt, 10-50 pcnt, 10-75 pcnt of max emissions
         segmentation_ic % contains solid 3D volumes for carotids
+        T1w_ic
+        taus % containers.Map
+        times % containers.Map
+        timesMid % containers.Map
         wmparc_ic
         
         % for B-splines in mlvg.Hunyadi2021
@@ -44,14 +52,18 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
     
     properties (Dependent)
         anatPath
-        CCIRPath
+        projPath
         derivativesPath
+        destinationPath
+        NCenterlineSamples % 1 voxel/mm for coarse representation of b-splines
         Nx
         Ny
         Nz
         mriPath
         petPath
         sourcedataPath
+        sourceAnatPath
+        sourcePetPath
         subFolder
     end
 
@@ -60,13 +72,20 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
         %% GET
         
         function g = get.anatPath(this)
-            g = fullfile(this.sourcedataPath, this.subFolder, 'anat', '');
+            g = fullfile(this.derivativesPath, this.subFolder, 'anat', '');
         end
-        function g = get.CCIRPath(this)
-            g = fileparts(fileparts(fileparts(this.petPath_)));
+        function g = get.projPath(this)
+            g = this.projPath_;
         end
         function g = get.derivativesPath(this)
-            g = fullfile(this.CCIRPath, 'derivatives', '');
+            g = fullfile(this.projPath, 'derivatives', '');
+        end
+        function g = get.destinationPath(this)
+            g = this.destPath_;
+        end
+        function g = get.NCenterlineSamples(this)
+            rngz = max(this.coords_bb{3}) - min(this.coords_bb{3});
+            g = ceil(rngz/this.T1w_ic.nifti.mmppix(3)); % sample to 1 mm, or 1 voxels/mm
         end
         function g = get.Nx(this)
             g = size(this.T1w_ic, 1);
@@ -81,55 +100,84 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             g = fullfile(this.derivativesPath, this.subFolder, 'mri', '');
         end
         function g = get.petPath(this)
-            g = this.petPath_;
+            g = fullfile(this.derivativesPath, this.subFolder, 'pet', '');
         end
         function g = get.sourcedataPath(this)
-            g = fullfile(this.CCIRPath, 'sourcedata', '');
+            g = fullfile(this.projPath, 'sourcedata', '');
+        end
+        function g = get.sourceAnatPath(this)
+            g = fullfile(this.sourcedataPath, this.subFolder, 'anat', '');
+        end
+        function g = get.sourcePetPath(this)
+            g = fullfile(this.sourcedataPath, this.subFolder, 'pet', '');
         end
         function g = get.subFolder(this)
-            g = fileparts(this.petPath_);
-            g = basename(g);
+            g = this.subFolder_;
         end
         
         %%
         
         function this = Fung2013(varargin)
             %% FUNG2013
+            %  @param optional destPath is the path for writing outputs.  Default is pwd.  
+            %         Must specify project ID & subject ID
+            %  @param t1w is a filename string to glob.
             %  @param coords from fsleyes [ x y z; ... ], [ [RS]; [LS]; [RI]; [LI] ].
             %  @param iterations ~ 130.
             %  @param smoothFactor ~ 0.
             
             ip = inputParser;
-            addOptional(ip, 'petPath', pwd, @isfolder)
+            addOptional(ip, 'destPath', pwd, @isfolder)
             addParameter(ip, 'ploton', true, @islogical)
-            addParameter(ip, 'plotmore', false, @islogical)
+            addParameter(ip, 'plotmore', true, @islogical)
+            addParameter(ip, 'plotdebug', false, @islogical)
             addParameter(ip, 't1w', 'sub-*_T1w.nii.gz', @ischar)
             addParameter(ip, 'coords', [], @isnumeric)
-            addParameter(ip, 'BBBuf', [10 10 4], @isnumeric)
+            addParameter(ip, 'BBBuf', [16 16 4], @isnumeric)
             addParameter(ip, 'iterations', 100, @isscalar)
             addParameter(ip, 'smoothFactor', 0, @isscalar)
             parse(ip, varargin{:})
             ipr = ip.Results;
-            this.petPath_ = ipr.petPath;
+            this.parseDestinationPath(ipr.destPath);
             this.ploton = ipr.ploton;
             this.plotmore = ipr.plotmore;
+            this.plotdebug = ipr.plotdebug;
             this.coords = ipr.coords;
             this.BBBuf = ipr.BBBuf;
             
             % gather requirements
-            t1w = globT(fullfile(this.anatPath, ipr.t1w));
+            t1w = globT(fullfile(this.sourceAnatPath, ipr.t1w));
             assert(isfile(t1w{1}))
             this.T1w_ic = mlfourd.ImagingContext2(t1w{1});
             this.hunyadi_ = mlvg.Hunyadi2021();
-            
-            % build segmentation
             this.buildCorners(this.coords);
-            this.buildSegmentation(ipr.iterations, 'smoothFactor', ipr.smoothFactor);
+
+            % some timing objects
+            this.taus = containers.Map;
+            this.taus('CO') = [15 60 60 60 60 60];
+            this.taus('HO') = [3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 5 5 5 5 5 5 10 10 10 10 10 10 10 10 30 30 30 30 30 30];
+            this.taus('OO') = [3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 5 5 5 5 5 5 10 10 10 10 10 10 10 10 30 30 30 30 30 30];
+            this.taus('FDG') = [5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 20 20 20 20 20 20 20 20 20 60 60 60 60 60 60 60 60 60 60 300 300 300 300 300 300 300 300 300];
+
+            this.times = containers.Map;
+            for key = this.taus.keys
+                 this.times(key{1}) = [0 cumsum(this.taus(key{1}))];
+            end
+
+            this.timesMid = containers.Map;
+            for key = this.taus.keys
+                taus_ = this.taus(key{1});
+                times_ = this.times(key{1});
+                this.timesMid(key{1}) = times_(1:length(taus_)) + taus_/2;
+            end
         end
         function this = buildCorners(this, varargin)
+            %% BUILDCORNERS builds representations of the bounding box as images and coord ranges.
+            %  As needed, it launches fsleyes for manual selection of bounding box corners.
             %  @param coords is [x y z; x2 y2 z2; x3 y3 z3; x4 y4 z4] | empty.
             %         coords is [ [RS]; [LS]; [RI]; [LI] ].
-            %  @return this.{corners*_ic, *_range}
+            %  @return this.corners*_ic, which represent corners of the bounding box with unit voxels in arrays of zeros.
+            %  @return this.coords_bb, which are row arrays for bases [x y z] that describe the range of bounding box voxels.
             
             %  f = mlvg.Fung2013
             %  f.buildCorners([158 122 85; 96 126 88; 156 116 27; 101 113 28])
@@ -180,6 +228,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             end
         end
         function this = buildSegmentation(this, varargin)
+            %% segments the arterial path using activecontour() with the 'Chan-Vese' method.            
             %  @param optional iterations ~ 100.
             %  @param smoothFactor ~ 0.
             %  @return this.segmentation_ic.
@@ -189,6 +238,10 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             addParameter(ip, 'smoothFactor', 0, @isscalar)
             parse(ip, varargin{:})
             ipr = ip.Results;
+
+            if ~isempty(this.segmentation_ic)
+                return
+            end
                         
             T1wb_img = this.T1w_ic.nifti.img(this.coords_bb{:});
             cornersb_img = this.cornersb_ic.nifti.img(this.coords_bb{:});
@@ -198,103 +251,221 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             if this.plotmore
                 this.plotSegmentation(ac)
                 title(sprintf('iterations %i, smooth %g', ipr.iterations, ipr.smoothFactor))
+                fn = fullfile(this.anatPath, [this.T1w_ic.fileprefix '_snakes.fig']);
+                if ~isfile(fn)
+                    savefig(fn)
+                end
             end
 
             % fit back into T1w
-            ic = this.T1w_ic.zeros; 
-            ic.fileprefix = 'segmentation_on_T1w';
+            ic = this.T1w_ic.zeros;
+            ic.filepath = this.destinationPath;
+            ic.fileprefix = [ic.fileprefix '_segmentation'];
             nii = ic.nifti;
             nii.img(this.coords_bb{:}) = ac;
-            nii.save()
+            %%nii.save()
             this.segmentation_ic = mlfourd.ImagingContext2(nii);
         end
         function this = buildCenterlines(this)
+            %% builds left and right centerlines, calling this.buildCenterline() for each.
+            %  @return this.centerlines_pcs are the pointCloud representation of the centerlines.
+            %  @return this.Cs are {L,R} points of the B-spline curve.
+            %  @return this.Ps are {L,R} matrices of B-spline control points.
+
+            if ~isempty(this.centerlines_pcs)
+                return
+            end
+
             img = logical(this.segmentation_ic);
             imgL = img(1:ceil(this.Nx/2),:,:);
             imgR = zeros(size(img));
             imgR(ceil(this.Nx/2)+1:end,:,:) = img(ceil(this.Nx/2)+1:end,:,:);
-            [pcL,CL,PL] = this.buildCenterline(imgL, '_left');
-            [pcR,CR,PR] = this.buildCenterline(imgR, '_right');
+            [pcL,CL,PL] = this.buildCenterline(imgL, 'L');
+            [pcR,CR,PR] = this.buildCenterline(imgR, 'R');
             this.centerlines_pcs = {pcL pcR};
             this.Cs = {CL CR};
             this.Ps = {PL PR};
         end
         function [pc,C,P] = buildCenterline(this, img, tag)
+            %% builds a centerline using mlvg.Hunyadi2021.
+            %  @param img is the data upon which a centerline is built.
+            %  @param tag is unused.
+            %  @return pc is the pointCloud representation of the centerline.
+            %  @return C are points of the B-spline curve.
+            %  @return P is the matrix of B-spline control points.
+
             assert(ischar(tag))
             idx = find(img);
             [X,Y,Z] = ind2sub(size(img), idx);             
             M(1,:) = X'; % M are ints cast as double
             M(2,:) = Y';
             M(3,:) = Z';
-            this.U = 2*length(Z);
+            this.U = this.NCenterlineSamples; 
             
             P = bspline_estimate(this.k, this.t, M); % double
             C = bspline_deboor(this.k, this.t, P, this.U); % double, ~2x oversampling for Z
             pc = pointCloud(C');
             
             if this.plotmore
+                h = figure;
+                pcshow(pointCloud(this.T1w_ic, 'thresh', 1000))
+                hold on; pcshow(pc.Location, '*m'); hold off;
+                fn_fig = fullfile(this.anatPath, sprintf('%s_%s_centerline.fig', this.T1w_ic.fileprefix, tag));
+                if ~isfile(fn_fig)
+                    saveas(h, fn_fig)
+                end
+                fn_png = fullfile(this.anatPath, sprintf('%s_%s_centerline.png', this.T1w_ic.fileprefix, tag));
+                if ~isfile(fn_png)
+                    set(h, 'InvertHardCopy', 'off');
+                    set(h,'Color',[0 0 0]); % RGB values [0 0 0] indicates black color
+                    saveas(h, fn_png)
+                end
+            end
+            if this.plotdebug
                 figure;
                 hold all;
                 plot3(M(1,:), M(2,:), M(3,:), 'k.');
                 plot3(P(1,:), P(2,:), P(3,:), 'b');
-                plot3(C(1,:), C(2,:), C(3,:), 'r');
+                plot3(C(1,:), C(2,:), C(3,:), 'm');
                 legend('segmentation', 'control points', 'curve', ...
                     'Location', 'Best');
                 hold off;
-                figure;
-                pcshow(pc)
+            end
+        end
+        function this = buildCORegistrationTargets(this, dyn_ic)
+            %% builds CO registration targets comprising time-averaged emissions.
+            %  Registration targets are R^3 images.
+            
+            timeAveraged = dyn_ic.timeAveraged();
+            timeAveraged_b25 = timeAveraged.blurred(2.5); % 2.5 mm blurring specified by Fung & Carson
+            for i = 1:3
+                this.registration.target_ics{i} = timeAveraged_b25; 
             end
         end
         function this = buildRegistrationTargets(this, dyn_ic)
+            %% builds registration targets comprising time-averaged emissions for times
+            %  sampled at {0.1:0.25,0.25:0.5,0.5:0.75} of maximal whole-brain emissions.
+            %  Viz., whole-brain emissions determine the sampling intervals,
+            %  but registration targets are R^3 images.
+
+            this.dyn_fileprefix = dyn_ic.fileprefix;
+            this.dyn_label = strrep(this.dyn_fileprefix, '_', ' ');
+            if contains(dyn_ic.fileprefix, 'CO') || contains(dyn_ic.fileprefix, 'OC')
+                this = this.buildCORegistrationTargets(dyn_ic);
+                return
+            end
+
             this.wmparc_ic = mlfourd.ImagingContext2(fullfile(this.mriPath, 'wmparc_on_T1w.nii.gz'));
             dyn_avgxyz = dyn_ic.volumeAveraged(logical(this.wmparc_ic));
             dyn_max = dipmax(dyn_avgxyz);
             img = dyn_avgxyz.nifti.img;
-            [~,it10] = max(img > 0.1*dyn_max);
-            [~,it25] = max(img > 0.25*dyn_max);
-            [~,it50] = max(img > 0.5*dyn_max);
-            [~,it75] = max(img > 0.75*dyn_max);
+            [~,this.it10] = max(img > 0.1*dyn_max);
+            [~,this.it25] = max(img > 0.25*dyn_max);
+            [~,this.it50] = max(img > 0.5*dyn_max);
+            [~,this.it75] = max(img > 0.75*dyn_max);
             
-            this.registration.target_ics{1} = dyn_ic.timeAveraged(it10:it25);
-            this.registration.target_ics{2} = dyn_ic.timeAveraged(it10:it50);
-            this.registration.target_ics{3} = dyn_ic.timeAveraged(it10:it75);
+            this.registration.target_ics{1} = dyn_ic.timeAveraged(this.it10:this.it25);
+            this.registration.target_ics{2} = dyn_ic.timeAveraged(this.it10:this.it50);
+            this.registration.target_ics{3} = dyn_ic.timeAveraged(this.it10:this.it75);
             for i = 1:3
-                this.registration.target_ics{i} = this.registration.target_ics{i}.blurred(2.5);
+                this.registration.target_ics{i} = this.registration.target_ics{i}.blurred(2.5); % 2.5 mm blurring specified by Fung & Carson
             end
         end
-        function [ics,dyn_ics] = call(this, varargin)
+        function [t_idif,ics] = call(this, varargin)
             %% CALL
             %  @param optional toglob, e.g., 'sub-*Dynamic*_on_T1w.nii.gz'
+            %  @return table of IDIFs; write table to text file.
             %  @return {ImagingContext2 objects for centerlines}
-            %  @return {ImagingContext2 objects for globbed}
             
             ip = inputParser;
-            addOptional(ip, 'toglob', 'sub-*Dynamic*_on_T1w.nii.gz', @ischar)
+            addOptional(ip, 'toglob', fullfile(this.petPath, 'sub-*Dynamic*_on_T1w.nii.gz'), @ischar)
+            addParameter(ip, 'iterations', 100, @isscalar)
+            addParameter(ip, 'smoothFactor', 0, @isscalar)
             parse(ip, varargin{:})
             ipr = ip.Results;
-            
-            % build centerlines
+
+            % build intermediate objects
+            this.buildSegmentation(ipr.iterations, 'smoothFactor', ipr.smoothFactor);
             this.buildCenterlines()
 
-            ics = {};
-            dyn_ics = {};
-            for niis = globT(ipr.toglob)                
-                dyn_ic = mlfourd.ImagingContext2(niis{1});                
+            niis = globT(ipr.toglob);
+            ics = cell(1, length(niis));
+            NIfTI_Filename = cell(1, length(niis));
+            tracer = cell(1, length(niis));
+            IDIF = cell(1, length(niis));
+            alg_ = this.alg;
+
+            for inii = 1:length(niis)
+
+                % sample input function from dynamic PET             
+                dyn_ic = mlfourd.ImagingContext2(niis{inii});                
                 this.buildRegistrationTargets(dyn_ic)
-                this.registerCenterlines('alg', 'cpd')
+                this.registerCenterlines('alg', alg_)
                 ic = this.pointCloudsToIC();
                 ic.filepath = dyn_ic.filepath;
                 ic.fileprefix = [dyn_ic.fileprefix '_idifmask'];
                 ic.save()
-                ics = [ics {ic}]; %#ok<AGROW>
-                dyn_ics = [dyn_ics {dyn_ic}]; %#ok<AGROW>
+                ics{inii} = ic;
+                idif = dyn_ic.volumeAveraged(ic);
+
+                % construct table variables
+                NIfTI_Filename{inii} = ic.fqfilename;
+                tracer{inii} = this.tracername(ic.fileprefix);
+                IDIF{inii} = asrow(this.decay_uncorrected(idif));
             end
+
+            % construct table and write
+            t_fileprefix = strsplit(niis{end}, '_on_T1w');
+            [~,t_descr] = fileparts(t_fileprefix{1});
+            t_idif = table(NIfTI_Filename, tracer, IDIF);
+            t_idif.Properties.Description = t_descr;
+            t_idif.Properties.VariableUnits = {'', '', 'Bq/mL'};
+            t_fqfileprefix = fullfile(this.petPath, [t_descr '_idif']);
+            writetable(t_idif, [t_fqfileprefix '.csv']);
+
+            % plot and save
+            h = figure;
+            hold on
+            for irow = 1:length(NIfTI_Filename)
+                plot(this.timesMid(tracer{irow}), IDIF{irow}, 'o-')
+            end
+            xlim([0 350])
+            xlabel('time (s)')
+            ylabel('activity density (Bq/mL)')
+            title('Image-derived Input Functions')
+            legend(tracer')
+            hold off
+            saveas(h, [t_fqfileprefix '.fig'])
+            saveas(h, [t_fqfileprefix '.png'])
         end
-        function h = plotRegistered(this, varargin)
+        function decay_uncorrected = decay_uncorrected(this, idif)
+            %  @param idif is an mlfourd.ImagingContext2 containing a double row.
+            %  @returns decay_uncorrected, the IDIF as a double row.
+
+            assert(isa(idif, 'mlfourd.ImagingContext2'))
+            decay_corrected = idif.nifti.img;
+            if contains(idif.fileprefix, 'CO') || contains(idif.fileprefix, 'OC')
+                tracer = 'CO';
+            end
+            if contains(idif.fileprefix, 'Water')
+                tracer = 'HO';
+            end
+            if contains(idif.fileprefix, 'Oxygen')
+                tracer = 'OO';
+            end
+            if contains(idif.fileprefix, 'FDG')
+                tracer = 'FDG';
+            end
+            assert(all(size(decay_corrected) == size(this.taus(tracer))))
+            radio = mlpet.Radionuclides(tracer);
+            decay_uncorrected = decay_corrected ./ radio.decayCorrectionFactors('taus', this.taus(tracer));
+        end
+        function [h,h1] = plotRegistered(this, varargin)
             % @param required target, pointCloud.
             % @param required centerlineOnTarget, pointCloud.
             % @param required centerline, pointCloud.
-            % @param required larerality, in {'' 'l' 'L' 'r' 'R'}.
+            % @param required laterality, in {'' 'l' 'L' 'r' 'R'}.
+            % @return handle(s) for figure(s).
             
             ip = inputParser;
             addRequired(ip, 'target', @(x) isa(x, 'pointCloud'))
@@ -303,18 +474,28 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             addRequired(ip, 'laterality', @(x) ismember(x, {'', 'l', 'L', 'r', 'R'}))
             parse(ip, varargin{:})
             ipr = ip.Results;
-            
-            if this.plotmore
-                %figure;
-                %pcshow(ipr.centerline)
-                %title(sprintf('centerline %s', upper(ipr.laterality)))
-                figure
-                pcshow(ipr.centerlineOnTarget)
-                title(sprintf('centerlineOnTarget %s', upper(ipr.laterality)))
-            end
+            Laterality = upper(ipr.laterality);
+        
             h = figure;
-            pcshowpair(ipr.target, ipr.centerlineOnTarget, 'VerticalAxis', 'Z')
-            title(sprintf('target (magenta) + centerlineOnTarget (green) %s', upper(ipr.laterality)))
+            pcshow(ipr.target)
+            hold on; 
+            pcshow(ipr.centerline.Location, '*g'); 
+            pcshow(ipr.centerlineOnTarget.Location, '*m'); 
+            hold off;
+            title(sprintf('centerline (green -> magenta) on target %s %s', upper(ipr.laterality), this.dyn_label))
+            saveas(h, fullfile(this.petPath, sprintf('%s_%s_centerline_target.fig', this.dyn_fileprefix, Laterality)))
+            set(h, 'InvertHardCopy', 'off');
+            set(h,'Color',[0 0 0]); % RGB values [0 0 0] indicates black color
+            saveas(h, fullfile(this.petPath, sprintf('%s_%s_centerline_target.png', this.dyn_fileprefix, Laterality)))
+            if this.plotdebug
+                h1 = figure;
+                pcshowpair(ipr.target, ipr.centerlineOnTarget, 'VerticalAxis', 'Z') % only magenta & green available in R2021b
+                title(sprintf('centerline (green) on target (magenta) %s %s', upper(ipr.laterality), this.dyn_label))
+                saveas(h1, fullfile(this.petPath, sprintf('%s_%s_centerline_target_mag.fig', this.dyn_fileprefix, Laterality)))
+                set(h1, 'InvertHardCopy', 'off');
+                set(h1,'Color',[0 0 0]); % RGB values [0 0 0] indicates black color
+                saveas(h1, fullfile(this.petPath, sprintf('%s_%s_centerline_target_mag.png', this.dyn_fileprefix, Laterality)))
+            end
         end
         function h = plotSegmentation(~, ac)
             %  @param required activecontour result.
@@ -328,12 +509,14 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             lighting phong            
         end
         function ic = pointCloudsToIC(this, varargin)
-                icL = this.pointCloudToIC(this.registration.centerlineOnTarget{1}, varargin{:});
-                icL = icL.imdilate(strel('sphere', 2));
-                icR = this.pointCloudToIC(this.registration.centerlineOnTarget{2}, varargin{:});
-                icR = icR.imdilate(strel('sphere', 2));
-                ic = icL + icR;
-                assert(1 == dipmax(ic))
+            %% converts point clouds for both hemispheres into ImagingContext objects.
+        
+            icL = this.pointCloudToIC(this.registration.centerlineOnTarget{1}, varargin{:});
+            icL = icL.imdilate(strel('sphere', this.dilationRadius));
+            icR = this.pointCloudToIC(this.registration.centerlineOnTarget{2}, varargin{:});
+            icR = icR.imdilate(strel('sphere', this.dilationRadius));
+            ic = icL + icR;
+            assert(1 == dipmax(ic))
         end
         function ic = pointCloudToIC(this, pc, varargin)
             ip = inputParser;
@@ -358,107 +541,103 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             %  @param gridStep preprocesses pcregister* methods.
             
             assert(~isempty(this.centerlines_pcs))
-            this.registerCenterline(  this.centerlines_pcs{1}, varargin{:}, 'laterality', 'L') 
-            this.reregisterCenterline(this.centerlines_pcs{1}, varargin{:}, 'laterality', 'L')            
-            this.registerCenterline(  this.centerlines_pcs{2}, varargin{:}, 'laterality', 'R')           
-            this.reregisterCenterline(this.centerlines_pcs{2}, varargin{:}, 'laterality', 'R')
+            this.centerlines_pcs{1} = ...
+                this.registerCenterline(this.centerlines_pcs{1}, varargin{:}, 'laterality', 'L');
+            this.centerlines_pcs{2} = ...
+                this.registerCenterline(this.centerlines_pcs{2}, varargin{:}, 'laterality', 'R');
         end
-        function this = registerCenterline(this, centerline, varargin)
+        function centerlineOnTarget = registerCenterline(this, varargin)
             %  @param required centerline is a pointCloud.
             %  @param optional ic3d is an ImagingContext2 for PET averaged over early times for bolus arrival.
-            %         Default is this.registration.target_ics{2}.
+            %         Default is this.registration.target_ics{3}.
             %  @param thresh applies to ic3d.  Default is 25000.
             %  @param alg is from {'ndt', 'icp', 'cpd'}.
             %  @param gridStep preprocesses pcregister* methods.
             %  @param laterality is in {'R' 'L'}.
+            %  @return centerlineOnTarget is a pointCloud.
             
             ip = inputParser;
+            ip.KeepUnmatched = true;
             addRequired(ip, 'centerline', @(x) isa(x, 'pointCloud'))
-            addOptional(ip, 'ic3d', this.registration.target_ics{2}, @(x) isa(x, 'mlfourd.ImagingContext2'))
-            addParameter(ip, 'thresh', 25000, @isnumeric)
-            addParameter(ip, 'alg', 'cpd', @(x) ismember(x, {'ndt', 'icp', 'cpd'}))
+            addOptional(ip, 'ic3d', this.registration.target_ics{3}, @(x) isa(x, 'mlfourd.ImagingContext2'))
+            addParameter(ip, 'thresh', [], @isnumeric)
+            addParameter(ip, 'alg', 'cpd', @(x) ismember(x, {'ndt', 'icp', 'cpd', 'fung'}))
             addParameter(ip, 'gridStep', 1, @isscalar)
             addParameter(ip, 'laterality', '', @(x) ismember(x, {'', 'l', 'L', 'r', 'R'})) % L has indices < Nx/2
-            parse(ip, centerline, varargin{:})
+            parse(ip, varargin{:})
             ipr = ip.Results;
             ipr.ic3d = this.maskInBoundingBox(ipr.ic3d, ipr.laterality);
             if isempty(ipr.thresh)
-                ipr.thresh = 0.1*dipmax(ipr.ic3d);
+                img = ipr.ic3d.nifti.img;
+                img = img(img > 0);
+                m_ = dipmedian(img);
+                s_ = dipstd(img);
+                if m_ - s_ > 0
+                    ipr.thresh = m_ - s_;
+                else
+                    ipr.thresh = m_;
+                end
             end
             target = pointCloud(ipr.ic3d, 'thresh', ipr.thresh); 
-            if this.ploton
+            if this.plotdebug
                 figure
                 pcshow(target)
-                title(sprintf('target %s', upper(ipr.laterality)))           
+                title(sprintf('target %s, thresh %g', upper(ipr.laterality), ipr.thresh))
             end
+            centerlineOri = copy(ipr.centerline);
             
+            idx = strcmpi(ipr.laterality, 'R') + 1; % idx == 1 <-> left            
             switch ipr.alg
                 case 'ndt'
-                    [tform,centerlineOnTarget,rmse] = pcregisterndt(ipr.centerline, target, ipr.gridStep, ...
+                    [tform,centerlineOnTarget,rmse] = pcregisterndt(centerlineOri, target, ipr.gridStep, ...
                         'Tolerance', [0.01 0.05]);
                 case 'icp'
                     if ipr.gridStep ~= 1
-                        ipr.centerline = pcdownsample(ipr.centerline, 'gridAverage', ipr.gridStep);
+                        centerlineOri = pcdownsample(centerlineOri, 'gridAverage', ipr.gridStep);
                     end
-                    [tform,centerlineOnTarget,rmse] = pcregistericp(ipr.centerline, target, ...
+                    [tform,centerlineOnTarget,rmse] = pcregistericp(centerlineOri, target, ...
                         'Extrapolate', true, 'Tolerance', [0.01 0.01]);
                 case 'cpd'
                     if ipr.gridStep ~= 1
-                        ipr.centerline = pcdownsample(ipr.centerline, 'gridAverage', ipr.gridStep);
+                        centerlineOri = pcdownsample(centerlineOri, 'gridAverage', ipr.gridStep);
                     end
-                    [tform,centerlineOnTarget,rmse] = pcregistercpd(ipr.centerline, target, ...
+                    [tform,centerlineOnTarget,rmse] = pcregistercpd(centerlineOri, target, ...
                         'Transform', 'Rigid', 'MaxIterations', 100, 'Tolerance', 1e-7); % 'InteractionSigma', 2
+                case 'fung'
+                    this.registration.tform{idx} = rigid3d(eye(4));
+                    rr = mlvg.Reregistration(this.T1w_ic);
+                    [tform,centerlineOnTarget,rmse] = rr.pcregistermax( ...
+                        this.registration.tform{idx}, centerlineOri, target);
                 otherwise
                     error('mlvg:ValueError', ...
                         'Fung2013.registerCenterlines.ipr.alg == %s', ipr.alg)
             end
-            
-            idx = strcmpi(ipr.laterality, 'R') + 1; % idx == 1 <-> left
+            this.registration.centerlineOnTarget{idx} = copy(centerlineOnTarget);
             this.registration.tform{idx} = tform;
-            this.registration.centerlineOnTarget{idx} = centerlineOnTarget;
             this.registration.rmse{idx} = rmse;
        
             if this.ploton
-                this.plotRegistered(target, centerlineOnTarget, ipr.centerline, ipr.laterality)
+                this.plotRegistered(target, centerlineOnTarget, centerlineOri, ipr.laterality)
             end
         end
-        function this = reregisterCenterline(this, varargin)
-            %  @param required centerline is pointCloud, this.U x 3.
-            %  @param optional ic3d is an ImagingContext2 for PET averaged over early times for bolus arrival.
-            %         Default is this.registration.target_ics{2}.
-            %  @param thresh applies to ic3d.  Default is 25000.
-            %  @param laterality is in {'R' 'L'}.
-            
-            ip = inputParser;
-            addRequired(ip, 'centerline', @(x) isa(x, 'pointCloud'))          
-            addOptional(ip, 'ic3d', this.registration.target_ics{2}, @(x) isa(x, 'mlfourd.ImagingContext2'))
-            addParameter(ip, 'thresh', 25000, @isnumeric)
-            addParameter(ip, 'laterality', '', @(x) ismember(x, {'', 'l', 'L', 'r', 'R'})) % L has indices < Nx/2
-            parse(ip, centerline, varargin{:})
-            ipr = ip.Results;
-            ipr.ic3d = this.maskInBoundingBox(ipr.ic3d, ipr.laterality);
-            if isempty(ipr.thresh)
-                ipr.thresh = 0.1*dipmax(ipr.ic3d);
+        function n = tracername(~, str)
+            if contains(str, 'CO')
+                n = 'CO';
+                return
             end
-            target = pointCloud(ipr.ic3d, 'thresh', ipr.thresh);
-            if this.ploton
-                figure
-                pcshow(target)
-                title(sprintf('target %s', upper(ipr.laterality)))           
-            end            
-            
-            idx = strcmpi(ipr.laterality, 'R') + 1; % idx == 1 <-> left
-            rr = mlvg.Reregistration();
-            [tform,centerlineOnTarget,reward] = rr.pcregistermax( ...
-                this.registration.tform{idx}, ipr.centerline, target);
-            this.reregistration.tform{idx} = tform;
-            this.reregistration.centerlineOnTarget{idx} = centerlineOnTarget;
-            this.reregistration.reward{idx} = reward;
-            
-            if this.ploton
-                this.plotRegistered( ...
-                    target, centerlineOnTarget, ipr.centerline, ipr.laterality)
+            if contains(str, 'Oxygen')
+                n = 'OO';
+                return
             end
+            if contains(str, 'Water')
+                n = 'HO';
+                return
+            end
+            if contains(str, 'FDG')
+                n = 'FDG';
+                return
+            end
+            error('mlvg:ValeError', 'Fung2013.tracername() did not recognize %s', str)
         end
     end
     
@@ -476,8 +655,10 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
     %% PRIVATE
     
     properties (Access = private)
+        destPath_
         hunyadi_
-        petPath_
+        projPath_
+        subFolder_
     end
     
     methods (Access = private)
@@ -496,6 +677,16 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             ifc.img = img;
             ifc.fileprefix = [ifc.fileprefix '_maskInBoundingBox'];
             ic = mlfourd.ImagingContext2(ifc);
+        end
+        function parseDestinationPath(this, dpath)
+            assert(contains(dpath, 'CCIR_'), 'Fung2013: destination path must include a project identifier')
+            assert(contains(dpath, 'sub-'), 'Fung2013: destination path must include a subject identifier')
+
+            this.destPath_ = dpath;
+            ss = strsplit(dpath, filesep);
+            [~,idxProjFold] = max(contains(ss, 'CCIR_'));
+            this.projPath_ = [filesep fullfile(ss{1:idxProjFold})];
+            this.subFolder_ = ss{contains(ss, 'sub-')}; % picks first occurance
         end
     end
 end
