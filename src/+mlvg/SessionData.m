@@ -36,8 +36,6 @@ classdef SessionData < mlnipet.MetabolicSessionData
             % @param folders ~ <project folder>/<session folder>/<scan folder>, in getenv('SINGULARITY_HOME')
             % @param ignoreFinishMark is logical, default := false
             
-            import mlvg.*
-
             ip = inputParser;
             addRequired(ip, 'folders', @(x) isfolder(fullfile(getenv('SINGULARITY_HOME'), x)))
             addParameter(ip, 'ignoreFinishMark', false, @islogical);
@@ -45,10 +43,10 @@ classdef SessionData < mlnipet.MetabolicSessionData
             parse(ip, varargin{:});
             ipr = adjustIpr(ip.Results);
     
-            this = SessionData( ...
-                'studyData', StudyRegistry.instance(), ...
-                'projectData', ProjectData('projectFolder', ipr.prjfold), ...
-                'subjectData', SubjectData('subjectFolder', ipr.subfold), ...
+            this = mlvg.SessionData( ...
+                'studyData', mlvg.Ccir1211Registry.instance(), ...
+                'projectData', mlvg.ProjectData('projectFolder', ipr.prjfold), ...
+                'subjectData', mlvg.SubjectData('subjectFolder', ipr.subfold), ...
                 'sessionFolder', ipr.sesfold, ...
                 'scanFolder', ipr.scnfold);
             this.ignoreFinishMark = ipr.ignoreFinishMark;  
@@ -111,9 +109,12 @@ classdef SessionData < mlnipet.MetabolicSessionData
                 
         %%
         
-        function getStudyCensus(~)
+        function getStudyCensus(this, ~)
             error('mlvg:NotImplementedError', 'SessionData.studyCensus');
-        end                
+        end            
+        function tracerRawdataLocation(this, ~)
+            error('mlvg:NotImplementedError', 'SessionData.tracerRawdataLocation');
+        end
         
       	function this = SessionData(varargin)
  			this = this@mlnipet.MetabolicSessionData(varargin{:}); 
@@ -127,11 +128,11 @@ classdef SessionData < mlnipet.MetabolicSessionData
             
             %% registry
             
-            this.registry = mlvg.StudyRegistry.instance();
+            this.registry = mlvg.Ccir1211Registry.instance();
             
             %% taus
             
-            if (~isempty(this.scanFolder_) && lexist(this.jsonFilename, 'file'))
+            if (~isempty(this.scanFolder_) && isfile(this.jsonFilename, 'file'))
                 j = jsondecode(fileread(this.jsonFilename));
                 this.taus_ = j.taus';
             end

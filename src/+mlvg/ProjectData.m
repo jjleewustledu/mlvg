@@ -16,10 +16,10 @@ classdef ProjectData < mlnipet.ProjectData
         %% GET
         
         function g    = get.jsonDir(~)
-            g = mlvg.StudyRegistry.instance().subjectsDir;
+            g = mlvg.Ccir1211Registry.instance().subjectsDir;
         end        
         function g    = get.projectsDir(~)
-            g = mlvg.StudyRegistry.instance().projectsDir;
+            g = mlvg.Ccir1211Registry.instance().projectsDir;
         end
         
         %% 

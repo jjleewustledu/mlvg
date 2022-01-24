@@ -16,12 +16,12 @@ classdef SubjectData < mlnipet.SubjectData
             obj = mlvg.ProjectData(varargin{:});
         end
         function subf = sesFolder2subFolder(sesf)
-            %% requires well-defined cell-array mlvg.StudyRegistry.instance().subjectsJson.
+            %% requires well-defined cell-array mlvg.Ccir1211Registry.instance().subjectsJson.
             %  @param sesf is a session folder.
             %  @returns corresponding subject folder.
             
             import mlvg.SubjectData
-            json = mlvg.StudyRegistry.instance().subjectsJson;
+            json = mlvg.Ccir1211Registry.instance().subjectsJson;
             subjectsLabel = fields(json);
             ssesf = split(sesf, '-');
             for sL = asrow(subjectsLabel)
@@ -61,7 +61,7 @@ classdef SubjectData < mlnipet.SubjectData
             %  @returns first-found non-trivial session folder in the subject folder.
             
             import mlvg.SubjectData
-            json = mlvg.StudyRegistry.instance().subjectsJson;
+            json = mlvg.Ccir1211Registry.instance().subjectsJson;
             subjects = fields(json);
             ss = split(subf, '-');
             sesf = {};
@@ -87,7 +87,7 @@ classdef SubjectData < mlnipet.SubjectData
 
  			this = this@mlnipet.SubjectData(varargin{:});
 
-            this.studyRegistry_ = mlvg.StudyRegistry.instance;
+            this.studyRegistry_ = mlvg.Ccir1211Registry.instance;
             this.subjectsJson_ = this.studyRegistry_.subjectsJson;
  		end
     end 

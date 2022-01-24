@@ -115,7 +115,7 @@ classdef TracerSuvrBuilder < mlfourdfp.AbstractSessionBuilder
             ogi = (cmro2 ./ cmrglc) * 5.4;
             ogi.fqfilename = this.tracerSuvrNamed('ogi');
             ogi.save;
-            ogi = mlfourd.ImagingContext(ogi);
+            ogi = mlfourd.ImagingContext2(ogi);
             
             this.product_ = ogi;
         end 

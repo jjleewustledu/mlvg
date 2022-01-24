@@ -1,4 +1,4 @@
-classdef (Sealed) StudyRegistry < handle & mlnipet.StudyRegistry
+classdef (Sealed) Ccir1211Registry < handle & mlnipet.StudyRegistry
 	%% STUDYREGISTRY 
 
 	%  $Revision$
@@ -9,9 +9,10 @@ classdef (Sealed) StudyRegistry < handle & mlnipet.StudyRegistry
  	%% It was developed on Matlab 8.5.0.197613 (R2015a) for MACI64.
  	
     properties
-        atlasTag = '_111'
         ignoredExperiments = {}
+        referenceTracer = 'FDG'
         tracerList = {'oc' 'oo' 'ho' 'fdg'}
+        umapType = 'ct'
     end
     
     properties (Dependent)
@@ -19,11 +20,6 @@ classdef (Sealed) StudyRegistry < handle & mlnipet.StudyRegistry
     end
     
     methods (Static)
-        function sub  = subjectID_to_sub(sid)
-            assert(ischar(sid));
-            ss = strsplit(sid, '_');
-            sub = ['sub-' ss{end}];
-        end
         function this = instance(varargin)
             %% INSTANCE
             %  @param optional qualifier is char \in {'initialize' ''}
@@ -58,10 +54,8 @@ classdef (Sealed) StudyRegistry < handle & mlnipet.StudyRegistry
     %% PRIVATE
     
 	methods (Access = private)		  
- 		function this = StudyRegistry(varargin)
-            this = this@mlnipet.StudyRegistry(varargin{:});             
-            this.referenceTracer = 'FDG';
-            this.umapType = 'vision';
+ 		function this = Ccir1211Registry(varargin)
+            this = this@mlnipet.StudyRegistry(varargin{:}); 
  		end
     end 
 
