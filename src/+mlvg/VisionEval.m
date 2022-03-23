@@ -15,51 +15,6 @@ classdef VisionEval
         oo2        
     end
     
-    methods (Static)
-        function unpackCNDA(varargin)
-            ip = inputParser;
-            addRequired(ip, 'folder', @isfolder)
-            addParameter(ip, 'f', 'sub-%n_%t_%d_%s', @ischar) % 20210219160921_FDG_Dynamic_8__
-                                                       % filename (%a=antenna  (coil) number, 
-                                                       %           %b=basename, 
-                                                       %           %c=comments, 
-                                                       %           %d=description, 
-                                                       %           %e=echo number, 
-                                                       %           %f=folder name, 
-                                                       %           %i=ID of patient, 
-                                                       %           %j=seriesInstanceUID, 
-                                                       %           %k=studyInstanceUID, 
-                                                       %           %m=manufacturer, 
-                                                       %           %n=name of patient, 
-                                                       %           %p=protocol, 
-                                                       %           %r=instance number, 
-                                                       %           %s=series number, 
-                                                       %           %t=time, 
-                                                       %           %u=acquisition number, 
-                                                       %           %v=vendor, 
-                                                       %           %x=study ID; 
-                                                       %           %z=sequence name; default 'twilite')
-            addParameter(ip, 'i', 'n') % ignore derived, localizer and 2D images (y/n, default n)
-            addParameter(ip, 'o', pwd) % output directory (omit to save to input folder)
-            parse(ip, varargin{:})
-            ipr = ip.Results;
-            
-            [~,w] = mlbash('which dcm2niix');
-            assert(~isempty(w))            
-            [~,w] = mlbash('which pigz');
-            if ~isempty(w)
-                z = 'y';
-            else
-                z = 'n';
-            end
-            if ~isfolder(ipr.o)
-                mkdir(ipr.o)
-            end
-            
-            mlbash(sprintf('dcm2niix -f %s -i %s -o %s -z %s %s', ipr.f, ipr.i, ipr.o, z, ipr.folder))
-        end
-    end
-    
     methods
         
         %%
@@ -104,26 +59,15 @@ classdef VisionEval
             legend('feet-1st', 'head-1st')
             xlabel('mid-frame time (s)')
             ylabel('activity (Bq/mL)')
-            
-            try
-                savefig(h, ...
-                    fullfile( ...
-                    sprintf('VisionEval_plotComparison_%s_in_%s.fig', tracer1, this.roi.fileprefix)))
-                figs = get(0, 'children');
-                saveas(figs(1), ...
-                    fullfile( ...
-                    sprintf('VisionEval_plotComparison_%s_in_%s.png', tracer1, this.roi.fileprefix)))
-                close(figs(1))
-            catch ME
-                handwarning(ME)
-            end
+            fqfp = sprintf('VisionEval_plotComparison_%s_in_%s.fig', tracer1, this.roi.fileprefix);
+            savemyfig(h, fqfp)
         end
         function this = resolveAll(this)
             import mlfourd.ImagingContext2
             fdgs = globT('*_FDG_Dynamic_*.nii.gz');
             fdgs = fdgs(~contains(fdgs, '_avgt'));
             this.fdg = ImagingContext2(fdgs{1});
-            this.fdg = this.fdg.selectFourdfp();
+            this.fdg = this.fdg.selectFourdfpTool();
             this.fdg.fileprefix = 'fdg';
             fdg_avgt = copy(this.fdg);
             fdg_avgt = fdg_avgt.timeAveraged();
@@ -136,33 +80,33 @@ classdef VisionEval
             cos = globT('*_CO_Dynamic_*.nii.gz');
             cos = cos(~contains(cos, '_avgt'));
             this.co1 = ImagingContext2(cos{1});
-            this.co1 = this.co1.selectFourdfp();
+            this.co1 = this.co1.selectFourdfpTool();
             this.co1.fileprefix = 'co1';
             co1_avgt = this.co1.timeAveraged();
             this.co2 = ImagingContext2(cos{2});
-            this.co2 = this.co2.selectFourdfp();
+            this.co2 = this.co2.selectFourdfpTool();
             this.co2.fileprefix = 'co2';
             co2_avgt = this.co2.timeAveraged();
             
             oos = globT('*_Oxygen_Dynamic_*.nii.gz');            
             oos = oos(~contains(oos, '_avgt'));
             this.oo1 = ImagingContext2(oos{1});
-            this.oo1 = this.oo1.selectFourdfp();
+            this.oo1 = this.oo1.selectFourdfpTool();
             this.oo1.fileprefix = 'oo1';
             oo1_avgt = this.oo1.timeAveraged();
             this.oo2 = ImagingContext2(oos{2});
-            this.oo2 = this.oo2.selectFourdfp();
+            this.oo2 = this.oo2.selectFourdfpTool();
             this.oo2.fileprefix = 'oo2';
             oo2_avgt = this.oo2.timeAveraged();
             
             hos = globT('*_Water_Dynamic_*.nii.gz');
             hos = hos(~contains(hos, '_avgt'));
             this.ho1 = ImagingContext2(hos{1});
-            this.ho1 = this.ho1.selectFourdfp();
+            this.ho1 = this.ho1.selectFourdfpTool();
             this.ho1.fileprefix = 'ho1';
             ho1_avgt = this.ho1.timeAveraged();
             this.ho2 = ImagingContext2(hos{2});
-            this.ho2 = this.ho2.selectFourdfp();
+            this.ho2 = this.ho2.selectFourdfpTool();
             this.ho2.fileprefix = 'ho2';
             ho2_avgt = this.ho2.timeAveraged();
             
