@@ -7,13 +7,8 @@ classdef Hunyadi2021 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyab
  	%  was created 25-Mar-2021 21:25:12 by jjlee,
  	%  last modified $LastChangedDate$ and placed into repository /Users/jjlee/MATLAB-Drive/mlvg/src/+mlvg.
  	%% It was developed on Matlab 9.9.0.1592791 (R2020b) Update 5 for MACI64.  Copyright 2021 John Joowon Lee.
- 	
-	properties
- 		
- 	end
 
-	methods 
-		  
+	methods 		  
  		function this = Hunyadi2021(varargin)
             % Illustrates B-spline curve estimation without knowing parameter values.
             % Copyright 2010 Levente Hunyadi            
