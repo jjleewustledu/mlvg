@@ -8,9 +8,9 @@ classdef Reregistration < handle
  	
 	properties
         epsilon = 1e-2
-        idxmax = 8 % cf. pcregistermax()
+        idxmax = 7 % cf. pcregistermax()
         mmppix
-        Niterations = 1 % # of iterated searches per specified search grid (dangle, dpos)
+        Niterations = 3 % max # of translational searches
  		radius % cf. sampleActivity()
         target_ic
         voxelVolume % mL
@@ -24,10 +24,26 @@ classdef Reregistration < handle
         tform_star = [];
         centerline_star = [];
         sa_star = 0;
- 	end
+    end
+
+    properties (Dependent)
+        stridea
+        stridex
+    end
 
 	methods 
-		  
+
+        %% GET
+
+        function g = get.stridea(~)
+            g = 7.5; % 10 degrees may be too large
+        end
+        function g = get.stridex(this)
+            g = 0.75/mean(this.mmppix); % 5 mm may be too large
+        end
+
+        %%
+
  		function this = Reregistration(varargin)
             ip = inputParser;
             addRequired(ip, 'target_ic', @(x) isa(x, 'mlfourd.ImagingContext2'))
@@ -36,7 +52,7 @@ classdef Reregistration < handle
 
             this.target_ic = ipr.target_ic;
             this.mmppix = this.target_ic.nifti.mmppix;
-            this.radius = min(this.mmppix) + this.epsilon;
+            this.radius = sqrt(2)*max(this.mmppix);
             this.voxelVolume = prod(this.mmppix)/1000;
         end
         
@@ -47,7 +63,7 @@ classdef Reregistration < handle
             tuple = pc.Location(loc,:);
         end
         function [tform,centerline1,rewards] = pcregistermax(this, varargin)
-            %  @param required tform is the initial tform, as rigid3d object.
+            %  @param required tform is the initial tform, as rigid3d|affine3d object.
             %  @param required centerline is a pointCloud, as numeric mlvg.Fung2013.U x 3.
             %  @param required target is a pointCloud.
             %  @return updated tform, as rigid3d object.
@@ -55,7 +71,7 @@ classdef Reregistration < handle
             %  @return rewards is the array of maximal activities sampled over the centerline.
             
             ip = inputParser;
-            addRequired(ip, 'tform', @(x) isa(x, 'rigid3d'))
+            addRequired(ip, 'tform', @(x) isa(x, 'rigid3d') || isa(x, 'affine3d'))
             addRequired(ip, 'centerline', @(x) isa(x, 'pointCloud'))
             addRequired(ip, 'target', @(x) isa(x, 'pointCloud'))
             parse(ip, varargin{:})
@@ -74,13 +90,22 @@ classdef Reregistration < handle
             target_ = pctransform(ipr.target,  cform_inv);
             rewards = this.sampleActivity(centerline_, target_);
             idx_rew = 1;
+
+            for iter = 1:this.Niterations
+                % translational search
+                idx_rew = idx_rew + 1;
+                [tform,centerline_,rewards(idx_rew)] = this.pctransformmax3(tform, centerline_, target_, 1);
+                disp(this)
+                disp(rewards)
+                fprintf('size(centerline.Location): %s\n', mat2str(size(centerline_.Location)))
+            end
             for idx = 1:this.idxmax
-                for iter = 1:this.Niterations
-                    idx_rew = idx_rew + 1;
-                    [tform,centerline_,rewards(idx_rew)] = this.pctransformmax(tform, centerline_, target_, idx);
-                    disp(this)
-                    disp(rewards)
-                end
+                % rigid body search
+                idx_rew = idx_rew + 1;
+                [tform,centerline_,rewards(idx_rew)] = this.pctransformmax6(tform, centerline_, target_, idx);
+                disp(this)
+                disp(rewards)
+                fprintf('size(centerline.Location): %s\n', mat2str(size(centerline_.Location)))
                 if ~this.progressing(rewards)
                     break
                 end
@@ -90,19 +115,23 @@ classdef Reregistration < handle
             centerline1 = pctransform(centerline_, cform);
             tform = affine3d(cform.T * tform.T);
         end
-        function [tform,centerline1,reward] = pctransformmax(this, tform, centerline, target, iteration)
-            %% implements Fung & Carson, sec. 2.4, para. 3., but only 5 samples per 6 affine d.o.f. ~ 15625 samples.
+        function [tform,centerline1,reward] = pctransformmax6(this, tform, centerline, target, iteration)
+            %% implements Fung & Carson, sec. 2.4, para. 3.:  5 samples per 6 affine d.o.f. ~ 15625 samples ~ 400 sec.
 
             tic
             centerline_ = copy(centerline); % don't clobber handle object
             da = 1/2^(iteration - 1);
             dx = da;
-            for a1 = -20*da:10*da:20*da % degrees
-                for a2 = -20*da:10*da:20*da
-                    for a3 = -20*da:10*da:20*da
-                        for x1 = -10*dx:5*dx:10*dx % voxel widths
-                            for x2 = -10*dx:5*dx:10*dx
-                                for x3 = -10*dx:5*dx:10*dx
+            stridea_ = this.stridea*da;
+            Th = 2*stridea_;
+            stridex_ = this.stridex*dx;
+            L = 2*stridex_;
+            for a1 = -Th:stridea_:Th % degrees
+                for a2 = -Th:stridea_:Th
+                    for a3 = -Th:stridea_:Th
+                        for x1 = -L:stridex_:L % voxel widths
+                            for x2 = -L:stridex_:L
+                                for x3 = -L:stridex_:L
 
                                     A1 = [1 0 0 0; ...
                                           0  cosd(a1) sind(a1) 0; ...
@@ -116,9 +145,9 @@ classdef Reregistration < handle
                                           -sind(a3) cosd(a3) 0 0; ...
                                            0 0 1 0;
                                            0 0 0 1];
-                                    X = eye(4);
-                                    X(4,1:3) = [x1 x2 x3];
-                                    tform_ = affine3d(X * A3 * A2 * A1);
+                                    X1 = eye(4);
+                                    X1(4,1:3) = [x1 x2 x3];
+                                    tform_ = affine3d(X1 * A3 * A2 * A1);
                                     centerline__ = pctransform(centerline_, tform_); % centerline trial
                                     sa_ = this.sampleActivity(centerline__, target);
                                     if sa_ > this.sa_star % update starred objects
@@ -142,7 +171,45 @@ classdef Reregistration < handle
             tform = affine3d(this.tform_star.T * tform.T);
             centerline1 = this.centerline_star;
             reward = this.sa_star;
-            fprintf('mlvg.Reregistration.pctransformmax: ')
+            fprintf('mlvg.Reregistration.pctransformmax6: ')
+            toc
+        end
+        function [tform,centerline1,reward] = pctransformmax3(this, tform, centerline, target, iteration)
+            %% implements Fung & Carson, sec. 2.4, para. 3.:  9 samples per 3 affine d.o.f. ~ 729 samples ~ 15 sec.
+
+            tic
+            centerline_ = copy(centerline); % don't clobber handle object
+            dx = 1/2^(iteration - 1);
+            stridex_ = this.stridex*dx;
+            L = 4*stridex_;
+            for x1 = -L:stridex_:L % voxel widths
+                for x2 = -L:stridex_:L
+                    for x3 = -L:stridex_:L
+
+                        X1 = eye(4);
+                        X1(4,1:3) = [x1 x2 x3];
+                        tform_ = affine3d(X1);
+                        centerline__ = pctransform(centerline_, tform_); % centerline trial
+                        sa_ = this.sampleActivity(centerline__, target);
+                        if sa_ > this.sa_star % update starred objects
+                            this.tform_star = tform_;
+                            this.centerline_star = copy(centerline__);
+                            this.sa_star = sa_;
+                            this.a1_star = 0;
+                            this.a2_star = 0;
+                            this.a3_star = 0;
+                            this.x1_star = x1;
+                            this.x2_star = x2;
+                            this.x3_star = x3;
+                        end
+                    end
+                end
+            end
+
+            tform = affine3d(this.tform_star.T * tform.T);
+            centerline1 = this.centerline_star;
+            reward = this.sa_star;
+            fprintf('mlvg.Reregistration.pctransformmax3: ')
             toc
         end
         function tf = progressing(this, rewards)
@@ -152,7 +219,7 @@ classdef Reregistration < handle
                 tf = true;
                 return
             end
-            tf = all(rewards(end) - rewards(end-this.Niterations:end-1) > this.epsilon*rewards(end));
+            tf = rewards(end) - rewards(end-1) > this.epsilon*rewards(end-1);
         end
         function a = sampleActivity(this, centerline, target)
             %  @param required centerline is a pointCloud, numeric of size mlvg.Fung2013.U x 3.
