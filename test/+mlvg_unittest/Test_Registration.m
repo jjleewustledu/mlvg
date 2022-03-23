@@ -11,7 +11,7 @@ classdef Test_Registration < matlab.unittest.TestCase
  	%% It was developed on Matlab 9.11.0.1769968 (R2021b) for MACI64.  Copyright 2021 John Joowon Lee.
  	
 	properties
- 		registry
+        bids
  		testObj
  	end
 
@@ -21,7 +21,34 @@ classdef Test_Registration < matlab.unittest.TestCase
  			this.assumeEqual(1,1);
  			this.verifyEqual(1,1);
  			this.assertEqual(1,1);
- 		end
+        end
+        function test_ctor(this)
+            disp(this.bids)
+            disp(this.testObj)
+            o = this.testObj;
+            o.t1w_ic.view(o.t1w_weight_ic, o.wmparc_on_t1w_ic)
+        end
+        function test_flirt_t1w_to_tof(this)
+            o = this.testObj;
+            ic = o.flirt_t1w_to_tof();
+            ic.view(this.bids.tof_ic.fqfn)
+        end
+        function test_flirt_tof_to_t1w(this)
+            o = this.testObj;
+            ic = o.flirt_tof_to_t1w();
+            ic.view(this.bids.t1w_ic.fqfn)
+        end
+        function flirt_all_to_t1w(this)
+            this = mlvg.Registration.flirt_all_to_t1w( ...
+                "projectPath", fullfile(getenv("SINGULARITY_HOME"), "CCIR_01211"), ...
+                "subjectFolder", "sub-108293");
+            pwd0 = pushd(this.bids.anatPath);
+            this.t1w_ic.view( ...
+                "sub-108293_20210218081030_T2w_on_T1w.nii.gz", ...
+                "sub-108293_20210218081030_FLAIR_on_T1w.nii.gz", ...
+                "sub-108293_20210218081030_angio_on_T1w.nii.gz")
+            popd(pwd0)
+        end
 	end
 
  	methods (TestClassSetup)

@@ -35,11 +35,9 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             % rmse 
             % target_ics are averages of frames containing 10-25 pcnt, 10-50 pcnt, 10-75 pcnt of max emissions
         segmentation_ic % contains solid 3D volumes for carotids
-        T1w_ic
         taus % containers.Map
         times % containers.Map
         timesMid % containers.Map
-        wmparc_ic
         
         % for B-splines in mlvg.Hunyadi2021
         k = 4
@@ -51,83 +49,69 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
     end
     
     properties (Dependent)
+        anatomy
+        anatomy_mask
         anatPath
-        projPath
-        derivativesPath
+        bids
         destinationPath
         NCenterlineSamples % 1 voxel/mm for coarse representation of b-splines
         Nx
         Ny
         Nz
-        mriPath
         petPath
-        sourcedataPath
-        sourceAnatPath
-        sourcePetPath
-        subFolder
     end
 
     methods
         
         %% GET
         
+        function g = get.anatomy(this)
+            g = this.anatomy_;
+        end
+        function g = get.anatomy_mask(this)
+            g = this.anatomy_mask_;
+        end
         function g = get.anatPath(this)
-            g = fullfile(this.derivativesPath, this.subFolder, 'anat', '');
+            g = this.bids_.anatPath;
         end
-        function g = get.projPath(this)
-            g = this.projPath_;
-        end
-        function g = get.derivativesPath(this)
-            g = fullfile(this.projPath, 'derivatives', '');
+        function g = get.bids(this)
+            g = this.bids_;
         end
         function g = get.destinationPath(this)
-            g = this.destPath_;
+            g = this.bids_.destinationPath;
         end
         function g = get.NCenterlineSamples(this)
             rngz = max(this.coords_bb{3}) - min(this.coords_bb{3});
-            g = ceil(rngz/this.T1w_ic.nifti.mmppix(3)); % sample to 1 mm, or 1 voxels/mm
+            g = ceil(rngz/this.anatomy.nifti.mmppix(3)); % sample to 1 mm, or 1 voxels/mm
         end
         function g = get.Nx(this)
-            g = size(this.T1w_ic, 1);
+            g = size(this.anatomy, 1);
         end
         function g = get.Ny(this)
-            g = size(this.T1w_ic, 2);
+            g = size(this.anatomy, 2);
         end
         function g = get.Nz(this)
-            g = size(this.T1w_ic, 3);
-        end
-        function g = get.mriPath(this)
-            g = fullfile(this.derivativesPath, this.subFolder, 'mri', '');
+            g = size(this.anatomy, 3);
         end
         function g = get.petPath(this)
-            g = fullfile(this.derivativesPath, this.subFolder, 'pet', '');
-        end
-        function g = get.sourcedataPath(this)
-            g = fullfile(this.projPath, 'sourcedata', '');
-        end
-        function g = get.sourceAnatPath(this)
-            g = fullfile(this.sourcedataPath, this.subFolder, 'anat', '');
-        end
-        function g = get.sourcePetPath(this)
-            g = fullfile(this.sourcedataPath, this.subFolder, 'pet', '');
-        end
-        function g = get.subFolder(this)
-            g = this.subFolder_;
+            g = this.bids_.petPath;
         end
         
         %%
         
         function this = Fung2013(varargin)
             %% FUNG2013
-            %  @param optional destPath is the path for writing outputs.  Default is pwd.  
+            %  @param optional destinationPath is the path for writing outputs.  Default is pwd.  
             %         Must specify project ID & subject ID
             %  @param t1w is a filename string to glob.
             %  @param coords from fsleyes [ x y z; ... ], [ [RS]; [LS]; [RI]; [LI] ].
             %  @param iterations ~ 130.
             %  @param smoothFactor ~ 0.
             
+ 			this.bids_ = mlvg.Ccir1211Bids(varargin{:}); 
+
             ip = inputParser;
-            addOptional(ip, 'destPath', pwd, @isfolder)
+            addOptional(ip, 'destinationPath', pwd, @isfolder)
             addParameter(ip, 'ploton', true, @islogical)
             addParameter(ip, 'plotmore', true, @islogical)
             addParameter(ip, 'plotdebug', false, @islogical)
@@ -138,7 +122,6 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             addParameter(ip, 'smoothFactor', 0, @isscalar)
             parse(ip, varargin{:})
             ipr = ip.Results;
-            this.parseDestinationPath(ipr.destPath);
             this.ploton = ipr.ploton;
             this.plotmore = ipr.plotmore;
             this.plotdebug = ipr.plotdebug;
@@ -146,11 +129,18 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             this.BBBuf = ipr.BBBuf;
             
             % gather requirements
-            t1w = globT(fullfile(this.sourceAnatPath, ipr.t1w));
-            assert(isfile(t1w{1}))
-            this.T1w_ic = mlfourd.ImagingContext2(t1w{1});
             this.hunyadi_ = mlvg.Hunyadi2021();
+            this.buildTimings();
+            this.buildAnatomy();
             this.buildCorners(this.coords);
+        end
+
+        function this = buildAnatomy(this)
+            this.anatomy_ = this.bids.t1w_ic;
+            this.anatomy_.selectNiftiTool;
+            this.anatomy_mask_ = this.bids.wmparc_ic;
+            this.anatomy_mask_.selectNiftiTool;
+        end
         function this = buildTimings(this)
             %% builds taus, times, timesMid.
 
@@ -197,8 +187,8 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             % pick corners
             if isempty(this.coords)  
                 disp('No coords for carotids are available.  Please find coords in the T1w and provide to the constructor.')
-                assert(~isempty(this.T1w_ic), 'Oops:  No T1w is available.  Please provide information for T1w to the constructor.')
-                this.T1w_ic.fsleyes
+                assert(~isempty(this.anatomy), 'Oops:  No T1w is available.  Please provide information for T1w to the constructor.')
+                this.anatomy.fsleyes
                 error('mlvg:Fung2013', ...
                     'No coords for carotids were available.  Please provide carotid coords to the constructor.')
             else                
@@ -206,7 +196,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             end
             
             % build ImagingContexts with corners, and also with blurring, binarizing
-            this.corners_ic = this.T1w_ic.zeros;
+            this.corners_ic = this.anatomy.zeros;
             this.corners_ic.fileprefix = 'corners_on_T1w';
             nii = this.corners_ic.nifti;
             nii.img(cc{1,:}) = 1;
@@ -221,7 +211,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             this.cornersb_ic.fileprefix = 'corners_on_T1w_spheres';
             
             % build coords_bb
-            sz = size(this.T1w_ic);
+            sz = size(this.anatomy);
             for m = 1:3
                 this.coords_bb{m} = (min(ipr.coords(:,m)) - this.BBBuf(m)):(max(this.coords(:,m)) + this.BBBuf(m) + 1);
                 bb = this.coords_bb{m};
@@ -235,7 +225,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             %  @return this.segmentation_ic.
             
             ip = inputParser;
-            addOptional(ip, 'iterations', 100, @isscalar)
+            addParameter(ip, 'iterations', 100, @isscalar)
             addParameter(ip, 'smoothFactor', 0, @isscalar)
             parse(ip, varargin{:})
             ipr = ip.Results;
@@ -244,7 +234,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
                 return
             end
                         
-            T1wb_img = this.T1w_ic.nifti.img(this.coords_bb{:});
+            T1wb_img = this.anatomy.nifti.img(this.coords_bb{:});
             cornersb_img = this.cornersb_ic.nifti.img(this.coords_bb{:});
             
             % call snakes, viz., iterate
@@ -252,14 +242,14 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             if this.plotmore
                 this.plotSegmentation(ac)
                 title(sprintf('iterations %i, smooth %g', ipr.iterations, ipr.smoothFactor))
-                fn = fullfile(this.anatPath, [this.T1w_ic.fileprefix '_snakes.fig']);
+                fn = fullfile(this.anatPath, [this.anatomy.fileprefix '_snakes.fig']);
                 if ~isfile(fn)
                     savefig(fn)
                 end
             end
 
             % fit back into T1w
-            ic = this.T1w_ic.zeros;
+            ic = this.anatomy.zeros;
             ic.filepath = this.destinationPath;
             ic.fileprefix = [ic.fileprefix '_segmentation'];
             nii = ic.nifti;
@@ -309,13 +299,13 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             
             if this.plotmore
                 h = figure;
-                pcshow(pointCloud(this.T1w_ic, 'thresh', 1000))
+                pcshow(pointCloud(this.anatomy, 'thresh', 1000))
                 hold on; pcshow(pc.Location, '*m'); hold off;
-                fn_fig = fullfile(this.anatPath, sprintf('%s_%s_centerline.fig', this.T1w_ic.fileprefix, tag));
+                fn_fig = fullfile(this.anatPath, sprintf('%s_%s_centerline.fig', this.anatomy.fileprefix, tag));
                 if ~isfile(fn_fig)
                     saveas(h, fn_fig)
                 end
-                fn_png = fullfile(this.anatPath, sprintf('%s_%s_centerline.png', this.T1w_ic.fileprefix, tag));
+                fn_png = fullfile(this.anatPath, sprintf('%s_%s_centerline.png', this.anatomy.fileprefix, tag));
                 if ~isfile(fn_png)
                     set(h, 'InvertHardCopy', 'off');
                     set(h,'Color',[0 0 0]); % RGB values [0 0 0] indicates black color
@@ -356,8 +346,8 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
                 return
             end
 
-            this.wmparc_ic = mlfourd.ImagingContext2(fullfile(this.mriPath, 'wmparc_on_T1w.nii.gz'));
-            dyn_avgxyz = dyn_ic.volumeAveraged(logical(this.wmparc_ic));
+            this.anatomy_mask_ = mlfourd.ImagingContext2(fullfile(this.mriPath, 'wmparc_on_T1w.nii.gz'));
+            dyn_avgxyz = dyn_ic.volumeAveraged(logical(this.anatomy_mask_));
             dyn_max = dipmax(dyn_avgxyz);
             img = dyn_avgxyz.nifti.img;
             [~,this.it10] = max(img > 0.1*dyn_max);
@@ -386,7 +376,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             ipr = ip.Results;
 
             % build intermediate objects
-            this.buildSegmentation(ipr.iterations, 'smoothFactor', ipr.smoothFactor);
+            this.buildSegmentation('iterations', ipr.iterations, 'smoothFactor', ipr.smoothFactor);
             this.buildCenterlines()
 
             niis = globT(ipr.toglob);
@@ -411,7 +401,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
 
                 % construct table variables
                 NIfTI_Filename{inii} = ic.fqfilename;
-                tracer{inii} = this.tracername(ic.fileprefix);
+                tracer{inii} = this.bids.obj2tracer(ic);
                 IDIF{inii} = asrow(this.decay_uncorrected(idif));
             end
 
@@ -445,21 +435,14 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
 
             assert(isa(idif, 'mlfourd.ImagingContext2'))
             decay_corrected = idif.nifti.img;
-            if contains(idif.fileprefix, 'CO') || contains(idif.fileprefix, 'OC')
-                tracer = 'CO';
-            end
-            if contains(idif.fileprefix, 'Water')
-                tracer = 'HO';
-            end
-            if contains(idif.fileprefix, 'Oxygen')
-                tracer = 'OO';
-            end
-            if contains(idif.fileprefix, 'FDG')
-                tracer = 'FDG';
-            end
-            assert(all(size(decay_corrected) == size(this.taus(tracer))))
+            assert(isvector(decay_corrected))
+
+            tracer = this.bids.obj2tracer(idif);
+            taus_ = this.taus(tracer);
+            N = min(length(decay_corrected), length(taus_));
             radio = mlpet.Radionuclides(tracer);
-            decay_uncorrected = decay_corrected ./ radio.decayCorrectionFactors('taus', this.taus(tracer));
+            decay_uncorrected = decay_corrected(1:N) ./ radio.decayCorrectionFactors('taus', taus_(1:N));
+            decay_uncorrected = asrow(decay_uncorrected);
         end
         function [h,h1] = plotRegistered(this, varargin)
             % @param required target, pointCloud.
@@ -526,7 +509,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             parse(ip, pc, varargin{:})
             ipr = ip.Results;
             
-            ic = this.T1w_ic.zeros();
+            ic = this.anatomy.zeros();
             ifc = ic.nifti;
             ifc.fileprefix = ipr.fileprefix;
             X = round(pc.Location(:,1));
@@ -606,7 +589,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
                         'Transform', 'Rigid', 'MaxIterations', 100, 'Tolerance', 1e-7); % 'InteractionSigma', 2
                 case 'fung'
                     this.registration.tform{idx} = rigid3d(eye(4));
-                    rr = mlvg.Reregistration(this.T1w_ic);
+                    rr = mlvg.Reregistration(this.anatomy);
                     [tform,centerlineOnTarget,rmse] = rr.pcregistermax( ...
                         this.registration.tform{idx}, centerlineOri, target);
                 otherwise
@@ -621,34 +604,22 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
                 this.plotRegistered(target, centerlineOnTarget, centerlineOri, ipr.laterality)
             end
         end
-        function n = tracername(~, str)
-            if contains(str, 'CO')
-                n = 'CO';
-                return
-            end
-            if contains(str, 'Oxygen')
-                n = 'OO';
-                return
-            end
-            if contains(str, 'Water')
-                n = 'HO';
-                return
-            end
-            if contains(str, 'FDG')
-                n = 'FDG';
-                return
-            end
-            error('mlvg:ValeError', 'Fung2013.tracername() did not recognize %s', str)
-        end
     end
     
     %% PROTECTED    
     
+    properties (Access = protected)
+        anatomy_
+        anatomy_mask_
+        bids_
+    end
+
     methods (Access = protected)
         function that = copyElement(this)
             %%  See also web(fullfile(docroot, 'matlab/ref/matlab.mixin.copyable-class.html'))
             
             that = copyElement@matlab.mixin.Copyable(this);
+            that.bids_ = copy(this.bids_);
             that.hunyadi_ = copy(this.hunyadi_);
         end
     end
@@ -656,10 +627,9 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
     %% PRIVATE
     
     properties (Access = private)
-        destPath_
+        destinationPath_
         hunyadi_
-        projPath_
-        subFolder_
+        projectPath_
     end
     
     methods (Access = private)
@@ -678,16 +648,6 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             ifc.img = img;
             ifc.fileprefix = [ifc.fileprefix '_maskInBoundingBox'];
             ic = mlfourd.ImagingContext2(ifc);
-        end
-        function parseDestinationPath(this, dpath)
-            assert(contains(dpath, 'CCIR_'), 'Fung2013: destination path must include a project identifier')
-            assert(contains(dpath, 'sub-'), 'Fung2013: destination path must include a subject identifier')
-
-            this.destPath_ = dpath;
-            ss = strsplit(dpath, filesep);
-            [~,idxProjFold] = max(contains(ss, 'CCIR_'));
-            this.projPath_ = [filesep fullfile(ss{1:idxProjFold})];
-            this.subFolder_ = ss{contains(ss, 'sub-')}; % picks first occurance
         end
     end
 end

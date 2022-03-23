@@ -32,12 +32,12 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
             disp(this.testObj)
         end
         function test_buildSegmentation(this)
-            this.testObj.buildSegmentation(100, 'smoothFactor', 0);
+            this.testObj.buildSegmentation('iterations', 100, 'smoothFactor', 0);
             disp(this.testObj)
         end
 		function test_buildCenterlines(this)
             f = this.testObj;        
-            f.buildSegmentation(130, 'smoothFactor', 0);
+            f.buildSegmentation('iterations', 130, 'smoothFactor', 0);
             f.buildCenterlines()
         end
         function test_registerCenterline_cpd(this) 
@@ -68,12 +68,7 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
             ho_row = obj.decay_uncorrected(ho_);
             plot(obj.timesMid('HO'), ho_row, obj.timesMid('HO'), ho_.nifti.img)
             legend('decay uncorrected', 'decay corrected')
-        end
-        function test_tracername(this)
-            for g = globT(fullfile(this.petPath, 'sub-*Dynamic*_on_T1w.nii.gz'))
-                fprintf('%s contains %s\n', g{1}, this.testObj.tracername(g{1}))
-            end
-        end
+        end        
         function test_call(this)
             [~,ics] = this.testObj.call();
             disp(ics)
@@ -86,10 +81,10 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
  	methods (TestClassSetup)
 		function setupFung2013(this)
  			import mlvg.*;
-            this.anatPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/derivatives/sub-108293/anat');
-            this.petPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/derivatives/sub-108293/pet');
-            this.sourceAnatPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/sourcedata/sub-108293/anat');
-            this.sourcePetPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/sourcedata/sub-108293/pet');
+            this.anatPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/derivatives/sub-108293/ses-20210218/anat');
+            this.petPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/derivatives/sub-108293/ses-20210421/pet');
+            this.sourceAnatPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/sourcedata/sub-108293/ses-20210218/anat');
+            this.sourcePetPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/sourcedata/sub-108293/ses-20210421/pet');
             %this.sourcePetPath = fullfile(getenv('HOME'), 'Singularity/subjects/sub-S58163/resampling_restricted');
             cd(this.petPath)         
             %this.corners = [113 178 140; 87 178 140; 136 149 58; 62 148 59] + 1; % long vglab
