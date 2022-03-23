@@ -7,50 +7,38 @@ classdef SessionData < mlnipet.MetabolicSessionData
  	%  last modified $LastChangedDate$
  	%  and checked into repository /Users/jjlee/Local/src/mlcvl/mlvg/src/+mlvg.
  	%% It was developed on Matlab 9.0.0.307022 (R2016a) Prerelease for MACI64.    
-    
-    properties (Constant)
-        STUDY_CENSUS_XLSX_FN = ''
-    end
-    
-    properties
-        registry
-        tracers = {'fdg' 'ho' 'oo' 'oc'}
-    end
-    
+        
     methods (Static)
         function t = consoleTaus(tracer)
-            %% see also t0_and_dt()
-                      
-            switch (upper(tracer))
-                case 'FDG'
-                    t = [5*ones(1,24) 20*ones(1,9) 60*ones(1,10) 300*ones(1,9)];
-                case {'OO' 'HO'}
-                    t = [3*ones(1,23) 5*ones(1,6) 10*ones(1,8) 30*ones(1,6)];
-                case {'OC' 'CO'}
-                    t = [15 60*ones(1,5)];
-                otherwise
-                    error('mlvg:IndexError', 'SessionData.consoleTaus.tracer->%s', tracer);
-            end
+            reg = mlvg.Ccir1211Registry.instance();
+            t = reg.consoleTaus(tracer);
         end 
         function this = create(varargin)
-            % @param folders ~ <project folder>/<session folder>/<scan folder>, in getenv('SINGULARITY_HOME')
-            % @param ignoreFinishMark is logical, default := false
+            %  Args:
+            %      folders (text): <proj folder>/derivatives/<sub folder>/<ses folder>/pet[/file], 
+            %                      e.g., 'CCIR_01211/derivatives/sub-108293/ses-20210421/pet'
+            %                      e.g., '$SINGULARITY_HOME/CCIR_01211/derivatives/sub-108293/ses-20210421/pet/sub-108293_ses-20210421155709_trc-fdg_proc-dyn_pet_on_T1w.nii.gz'
+            %      ignoreFinishMark (logical): default := false
+            %      reconstructionMethod (text): e.g., 'e7', 'NiftyPET'
             
             ip = inputParser;
-            addRequired(ip, 'folders', @(x) isfolder(fullfile(getenv('SINGULARITY_HOME'), x)))
+            addRequired(ip, 'folders', @istext);
             addParameter(ip, 'ignoreFinishMark', false, @islogical);
-            addParameter(ip, 'reconstructionMethod', 'e7', @ischar);
+            addParameter(ip, 'reconstructionMethod', 'e7', @istext);
+            addParameter(ip, 'studyRegistry', mlvg.Ccir1211Registry.instance());
             parse(ip, varargin{:});
-            ipr = adjustIpr(ip.Results);
+            [ipr,b,ic] = adjustIpr(ip.Results);
     
             this = mlvg.SessionData( ...
-                'studyData', mlvg.Ccir1211Registry.instance(), ...
+                'studyData', ipr.studyRegistry, ...
                 'projectData', mlvg.ProjectData('projectFolder', ipr.prjfold), ...
                 'subjectData', mlvg.SubjectData('subjectFolder', ipr.subfold), ...
                 'sessionFolder', ipr.sesfold, ...
-                'scanFolder', ipr.scnfold);
+                'scanFolder', ipr.scnfold, ...
+                'bids', b, ...
+                'imagingContext', ic);
             this.ignoreFinishMark = ipr.ignoreFinishMark;  
-            this.reconstructionMethod = ipr.reconstructionMethod;          
+            this.reconstructionMethod = ipr.reconstructionMethod;
             
             function [ipr,b,ic] = adjustIpr(ipr)
                 ss = strsplit(ipr.folders, filesep);  
@@ -81,9 +69,20 @@ classdef SessionData < mlnipet.MetabolicSessionData
                 end
             end
         end
-        function sessd = struct2sessionData(sessObj)
-            if (isa(sessObj, 'mlvg.SessionData'))
-                sessd = sessObj;
+        function obj = struct2sessionData(obj) %#ok<INUSD> 
+            error('mlvg:NotImplementedError', 'SessionData.struct2sessionData')
+        end
+    end
+
+    properties (Constant)
+        STUDY_CENSUS_XLSX_FN = ''
+    end
+    
+    properties
+        defects = {}
+        tracers = {'fdg' 'ho' 'oo' 'oc'}
+    end
+
     properties (Dependent)
         projectsDir % homolog of __Freesurfer__ subjectsDir
         projectsPath
@@ -283,36 +282,42 @@ classdef SessionData < mlnipet.MetabolicSessionData
             g = this.registry_;
         end
 
-    methods
-                
         %%
         
-        function getStudyCensus(this, ~)
-            error('mlvg:NotImplementedError', 'SessionData.studyCensus');
-        end            
-        function tracerRawdataLocation(this, ~)
+        function t = alternativeTaus(this)
+            t = mlvg.SessionData.consoleTaus(this.tracer);
+        end
+        function p = petPointSpread(~, varargin)
+            vis = mlsiemens.VisionRegistry.instance();
+            p = vis.petPointSpread(varargin{:});
+        end
+        function tracerRawdataLocation(~)
             error('mlvg:NotImplementedError', 'SessionData.tracerRawdataLocation');
         end
         
       	function this = SessionData(varargin)
  			this = this@mlnipet.MetabolicSessionData(varargin{:}); 
+            
+            ip = inputParser;
+            ip.KeepUnmatched = true;
+            addParameter(ip, 'bids', []);
+            addParameter(ip, 'imagingContext', []);
+            addParameter(ip, 'registry', mlvg.Ccir1211Registry.instance());
+            parse(ip, varargin{:});   
+            ipr = ip.Results;
+            this.bids_ = ipr.bids;
+            this.imagingContext_ = ipr.imagingContext;
+            this.registry_ = ipr.registry;
+            if isempty(this.tracer_) && ~isempty(this.bids_) && ~isempty(this.imagingContext_)
+                this.tracer_ = this.bids_.obj2tracer(this.imagingContext_);
+            end
+
+            this.ReferenceTracer = 'FDG';
             if isempty(this.studyData_)
                 this.studyData_ = mlvg.StudyData();
             end
-            this.ReferenceTracer = 'FDG';
             if isempty(this.projectData_)
                 this.projectData_ = mlvg.ProjectData('sessionStr', this.sessionFolder);
-            end
-            
-            %% registry
-            
-            this.registry = mlvg.Ccir1211Registry.instance();
-            
-            %% taus
-            
-            if (~isempty(this.scanFolder_) && isfile(this.jsonFilename, 'file'))
-                j = jsondecode(fileread(this.jsonFilename));
-                this.taus_ = j.taus';
             end
         end
     end
