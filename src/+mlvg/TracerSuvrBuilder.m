@@ -214,8 +214,8 @@ classdef TracerSuvrBuilder < mlfourdfp.AbstractSessionBuilder
             
             ip = inputParser;
             ip.KeepUnmatched = true;
-            addParameter(ip, 'workpath', fullfile(this.sessionData.subjectPath, 'resampling_restricted', ''))
-            addParameter(ip, 'outpath',  fullfile(this.sessionData.subjectPath, 'resampling_restricted', 'SUVR', ''))
+            addParameter(ip, 'workpath', this.sessionData.dataPath)
+            addParameter(ip, 'outpath',  fullfile(this.sessionData.dataPath, 'SUVR', ''))
             parse(ip, varargin{:})
             ipr = ip.Results;
             this.workpath = ipr.workpath;

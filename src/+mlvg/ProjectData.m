@@ -16,7 +16,7 @@ classdef ProjectData < mlnipet.ProjectData
         %% GET
         
         function g    = get.jsonDir(~)
-            g = mlvg.Ccir1211Registry.instance().subjectsDir;
+            g = fullfile(this.projectsDir, this.projectFolder_);
         end        
         function g    = get.projectsDir(~)
             g = mlvg.Ccir1211Registry.instance().projectsDir;

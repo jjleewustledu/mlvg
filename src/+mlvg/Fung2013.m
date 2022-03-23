@@ -151,13 +151,14 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             this.T1w_ic = mlfourd.ImagingContext2(t1w{1});
             this.hunyadi_ = mlvg.Hunyadi2021();
             this.buildCorners(this.coords);
+        function this = buildTimings(this)
+            %% builds taus, times, timesMid.
 
-            % some timing objects
             this.taus = containers.Map;
-            this.taus('CO') = [15 60 60 60 60 60];
-            this.taus('HO') = [3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 5 5 5 5 5 5 10 10 10 10 10 10 10 10 30 30 30 30 30 30];
-            this.taus('OO') = [3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 5 5 5 5 5 5 10 10 10 10 10 10 10 10 30 30 30 30 30 30];
-            this.taus('FDG') = [5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 20 20 20 20 20 20 20 20 20 60 60 60 60 60 60 60 60 60 60 300 300 300 300 300 300 300 300 300];
+            this.taus('CO') = this.bids.registry.consoleTaus('CO');
+            this.taus('OO') = this.bids.registry.consoleTaus('OO');
+            this.taus('HO') = this.bids.registry.consoleTaus('HO');
+            this.taus('FDG') = this.bids.registry.consoleTaus('FDG');
 
             this.times = containers.Map;
             for key = this.taus.keys
