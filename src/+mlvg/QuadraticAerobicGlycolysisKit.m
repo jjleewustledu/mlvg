@@ -471,18 +471,21 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             %  @param required metric is char.
             %  @param datetime is datetime or char, .e.g., '20200101000000' | ''.
             %  @param dateonly is logical.
-            %  @param tags is char, e.g., '_b43_wmparc1'
+            %  @param tags is char, e.g., 'b43_wmparc1', default ''.
             
             ip = inputParser;
             ip.KeepUnmatched = true;
             addRequired(ip, 'metric', @ischar)
             addParameter(ip, 'datetime', this.sessionData.datetime, @(x) isdatetime(x) || ischar(x))
             addParameter(ip, 'dateonly', false, @islogical)
-            addParameter(ip, 'tags', '', @ischar)
+            addParameter(ip, 'tags', '', @istext)
             parse(ip, metric, varargin{:})
             ipr = ip.Results;
             ipr.metric = lower(ipr.metric);
 
+            if ~isempty(ipr.tags)
+                ipr.tags = strcat("_", strip(ipr.tags, "_"));
+            end
             if ischar(ipr.datetime)
                 adatestr = ipr.datetime;
             end
@@ -497,7 +500,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             % e.g., derivatives/sub-108293/pet/sub-108293_ses-20210421144815_trc-oc_proc-dyn_pet_on_T1w.nii.gz
             fqfn = fullfile( ...
                 this.dataPath, ...
-                sprintf('%s_ses-%s_trc-%s_proc-%s_pet%s%s%s', ...
+                sprintf('%s_ses-%s_trc-%s_proc-%s_pet_%s%s%s', ...
                         this.subjectFolder, ...
                         adatestr, ...
                         this.metric2tracer(ipr.metric), ...

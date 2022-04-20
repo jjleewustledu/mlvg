@@ -57,7 +57,7 @@ classdef (Sealed) Ccir1211Registry < handle & mlpipeline.IStudyRegistry
     end
 
     properties
-        atlasTag = '_111'
+        atlasTag = '111'
         blurTag = ''
         comments = ''
         Ddatetime0 % seconds
