@@ -21,6 +21,7 @@ classdef (Abstract) VisionBids < handle & mlpipeline.Bids
         t1w_ic
         t2w_ic
         tof_ic
+        tof_on_t1w_ic
         wmparc_ic % FreeSurfer
     end
 
@@ -30,7 +31,7 @@ classdef (Abstract) VisionBids < handle & mlpipeline.Bids
 
         function g = get.flair_ic(this)
             if ~isempty(this.flair_ic_)
-                g = this.flair_ic_;
+                g = copy(this.flair_ic_);
                 return
             end
             globbed = globT(this.flair_toglob);
@@ -41,7 +42,7 @@ classdef (Abstract) VisionBids < handle & mlpipeline.Bids
         end
         function g = get.T1_ic(this)
             if ~isempty(this.T1_ic_)
-                g = this.T1_ic_;
+                g = copy(this.T1_ic_);
                 return
             end
             fn = fullfile(this.mriPath, 'T1.mgz');
@@ -54,22 +55,22 @@ classdef (Abstract) VisionBids < handle & mlpipeline.Bids
         end
         function g = get.t1w_ic(this)
             if ~isempty(this.t1w_ic_)
-                g = this.t1w_ic_;
+                g = copy(this.t1w_ic_);
                 return
             end
             globbed = globT(this.t1w_toglob);
             fn = globbed{end};
-            assert(isfile(fn))
-            fn = fullfile(this.anatPath, strcat(mybasename(fn), '_robustfov.nii.gz'));
+            %assert(isfile(fn))
+            fn = fullfile(this.anatPath, strcat(mybasename(fn), '_orient-std.nii.gz'));
             if ~isfile(fn)
-                this.build_robustfov(this.t1w_toglob);
+                this.build_orientstd(this.t1w_toglob);
             end
             this.t1w_ic_ = mlfourd.ImagingContext2(fn);
             g = copy(this.t1w_ic_);
         end
         function g = get.t2w_ic(this)
             if ~isempty(this.t2w_ic_)
-                g = this.t2w_ic_;
+                g = copy(this.t2w_ic_);
                 return
             end
             globbed = globT(this.t2w_toglob);
@@ -80,18 +81,41 @@ classdef (Abstract) VisionBids < handle & mlpipeline.Bids
         end
         function g = get.tof_ic(this)
             if ~isempty(this.tof_ic_)
-                g = this.tof_ic_;
+                g = copy(this.tof_ic_);
                 return
             end
             globbed = globT(this.tof_toglob);
             fn = globbed{end};
-            assert(isfile(fn))
+            %assert(isfile(fn))
+            fn = fullfile(this.anatPath, strcat(mybasename(fn), '_orient-std.nii.gz'));
+            if ~isfile(fn)
+                this.build_orientstd(this.tof_toglob);
+            end
             this.tof_ic_ = mlfourd.ImagingContext2(fn);
             g = copy(this.tof_ic_);
         end
+        function g = get.tof_on_t1w_ic(this)
+            if ~isempty(this.tof_on_t1w_ic_)
+                g = copy(this.tof_on_t1w_ic_);
+                return
+            end
+            fn = strcat(this.tof_ic.fqfp, '_on_T1w.nii.gz');
+            if isfile(fn)
+                this.tof_on_t1w_ic_ = mlfourd.ImagingContext2(fn);
+                g = copy(this.tof_on_t1w_ic_);
+                return
+            end
+            f = mlfsl.Flirt( ...
+                'in', this.tof_ic.fqfn, ...
+                'ref', this.t1w_ic.fqfn, ...
+                'out', fn);
+            f.flirt();
+            this.tof_on_t1w_ic_ = mlfourd.ImagingContext2(fn);
+            g = copy(this.tof_on_t1w_ic_);
+        end
         function g = get.wmparc_ic(this)
             if ~isempty(this.wmparc_ic_)
-                g = this.wmparc_ic_;
+                g = copy(this.wmparc_ic_);
                 return
             end
             fn = fullfile(this.mriPath, 'wmparc.mgz');
@@ -115,9 +139,29 @@ classdef (Abstract) VisionBids < handle & mlpipeline.Bids
             this = this@mlpipeline.Bids(varargin{:});
         end
 
+        function [s,r] = build_orientstd(this, varargin)
+            %  Args:
+            %      patt (text): e.g., this.t1w_toglob ~ fullfile(this.sourceAnatPath, 'sub-*_T1w_MPR_vNav_4e_RMS.nii.gz')
+
+            ip = inputParser;
+            addOptional(ip, 'patt', this.t1w_toglob, @istext)
+            addOptional(ip, 'destination_path', this.anatPath, @isfolder)
+            parse(ip, varargin{:});
+            ipr = ip.Results;
+
+            for g = glob(ipr.patt)
+                [~,fp] = myfileparts(g{end});
+                fqfn = fullfile(ipr.destination_path, strcat(fp, '_orient-std.nii.gz'));
+                cmd = sprintf('fslreorient2std %s %s', g{1}, fqfn);
+                [s,r] = mlbash(cmd);
+                ic = mlfourd.ImagingContext2(fqfn);
+                ic.selectNiftiTool();
+                ic.save();
+            end
+        end
         function [s,r] = build_robustfov(this, varargin)
             %  Args:
-            %      patt (text): e.g., this.t1w_toglobs ~ fullfile(this.sourceAnatPath, 'sub-*_T1w_MPR_vNav_4e_RMS.nii.gz')
+            %      patt (text): e.g., this.t1w_toglob ~ fullfile(this.sourceAnatPath, 'sub-*_T1w_MPR_vNav_4e_RMS.nii.gz')
 
             ip = inputParser;
             addOptional(ip, 'patt', this.t1w_toglob, @istext)
@@ -168,6 +212,7 @@ classdef (Abstract) VisionBids < handle & mlpipeline.Bids
         t1w_ic_
         t2w_ic_
         tof_ic_
+        tof_on_t1w_ic_
         wmparc_ic_
     end
 
