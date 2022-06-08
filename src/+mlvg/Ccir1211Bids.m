@@ -262,8 +262,8 @@ classdef Ccir1211Bids < handle & mlvg.VisionBids
             this = this@mlvg.VisionBids(varargin{:})          
 
             this.flair_toglob = fullfile(this.sourceAnatPath, 'sub-*_3D_FLAIR_Sag.nii.gz');
-            this.pet_dyn_toglob = fullfile(this.petPath, 'sub-*Dynamic*_on_T1w.nii.gz');
-            this.pet_static_toglob = fullfile(this.petPath, 'sub-*Static*_on_T1w.nii.gz');
+            this.pet_dyn_toglob = fullfile(this.sourcePetPath, 'sub-*_proc-dyn_pet.nii.gz');
+            this.pet_static_toglob = fullfile(this.sourcePetPath, 'sub-*_proc-static_pet.nii.gz');
             this.t1w_toglob = fullfile(this.sourceAnatPath, 'sub-*_T1w_MPR_vNav_4e_RMS.nii.gz');
             this.t2w_toglob = fullfile(this.sourceAnatPath, 'sub-*_T2w_SPC_vNava.nii.gz');
             this.tof_toglob = fullfile(this.sourceAnatPath, 'sub-*_tof_fl3d_tra_p2_multi-slab.nii.gz');
@@ -271,8 +271,7 @@ classdef Ccir1211Bids < handle & mlvg.VisionBids
             this.json_ = mlvg.Ccir1211Json();
             this.registry_ = mlvg.Ccir1211Registry.instance();
         end
-    end
-    
+    end    
 
     %% PROTECTED
 
