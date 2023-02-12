@@ -1,5 +1,5 @@
-classdef (Sealed) Ccir1211Registry < handle & mlpipeline.IStudyRegistry
-	%% STUDYREGISTRY 
+classdef (Sealed) Ccir1211Registry < handle & mlpipeline.StudyRegistry
+	%% CCIR1211REGISTRY 
 
 	%  $Revision$
  	%  was created 15-Oct-2015 16:31:41
@@ -8,56 +8,8 @@ classdef (Sealed) Ccir1211Registry < handle & mlpipeline.IStudyRegistry
  	%  and checked into repository /Users/jjlee/Local/src/mlcvl/mlvg/src/+mlvg.
  	%% It was developed on Matlab 8.5.0.197613 (R2015a) for MACI64.
  	    
-    methods (Static)
-        function t = consoleTaus(tracer)
-            %% see also t0_and_dt()
-                      
-            switch (upper(tracer))
-                case 'FDG'
-                    t = [5*ones(1,24) 20*ones(1,9) 60*ones(1,10) 300*ones(1,9)];
-                case {'OO' 'HO'}
-                    t = [3*ones(1,23) 5*ones(1,6) 10*ones(1,8) 30*ones(1,6)];
-                case {'OC' 'CO'}
-                    t = [15 60*ones(1,5)];
-                otherwise
-                    error('mlvg:IndexError', 'SessionData.consoleTaus.tracer->%s', tracer);
-            end
-        end 
-        function this = instance(varargin)
-            %% INSTANCE
-            %  @param optional qualifier is char \in {'initialize' ''}
-            
-            ip = inputParser;
-            addOptional(ip, 'qualifier', '', @ischar)
-            parse(ip, varargin{:})
-            
-            persistent uniqueInstance
-            if (strcmp(ip.Results.qualifier, 'initialize'))
-                uniqueInstance = [];
-            end          
-            if (isempty(uniqueInstance))
-                this = mlvg.Ccir1211Registry();
-                uniqueInstance = this;
-            else
-                this = uniqueInstance;
-            end
-        end
-        function pth = sourcedataPathToDerivativesPath(pth)
-            pth = strrep(pth, 'sourcedata', 'derivatives');
-        end
-        function sub = workpath2subject(pth)
-            c = fileparts2cell(pth);
-            msk = contains(c, 'sub-');
-            sub = c(msk);
-        end
-    end  
-
-    properties (Constant)
-        PREFERRED_TIMEZONE = 'America/Chicago'
-    end
-
     properties
-        atlasTag = '111'
+        atlasTag = 'on_T1w'
         blurTag = ''
         comments = ''
         Ddatetime0 % seconds
@@ -78,7 +30,7 @@ classdef (Sealed) Ccir1211Registry < handle & mlpipeline.IStudyRegistry
     end
     
     properties (Dependent)
-        earliestCalibrationDatetime
+        earliestCalibrationDatetime        
         projectsDir
         rawdataDir
         subjectsDir
@@ -86,13 +38,10 @@ classdef (Sealed) Ccir1211Registry < handle & mlpipeline.IStudyRegistry
         tBuffer
     end
     
-    methods
-        
-        %% GET
-        
+    methods % GET        
         function g = get.earliestCalibrationDatetime(~)
-            %g = datetime(2015,1,1, 'TimeZone', 'America/Chicago'); % accomodates sub-S33789
-            g = datetime(2016,7,19, 'TimeZone', 'America/Chicago');
+            %g = datetime(2015,1,1, 'TimeZone', 'local'); % accomodates sub-S33789
+            g = datetime(2016,7,19, 'TimeZone', 'local');
         end
         function g = get.projectsDir(~)
             g = getenv('SINGULARITY_HOME');
@@ -113,11 +62,41 @@ classdef (Sealed) Ccir1211Registry < handle & mlpipeline.IStudyRegistry
         function g = get.tBuffer(this)
             g = max(0, -this.Ddatetime0) + this.T;
         end
+    end
 
-        %%  
+    methods
 
     end
     
+    methods (Static)
+        function t = consoleTaus(tracer)
+            t = mlvg.Ccir1211Scan.consoleTaus(tracer);
+        end 
+        function this = instance(reset)
+            arguments
+                reset = []
+            end
+            persistent uniqueInstance
+            if ~isempty(reset)
+                uniqueInstance = [];
+            end
+            if (isempty(uniqueInstance))
+                this = mlvg.Ccir1211Registry();
+                uniqueInstance = this;
+            else
+                this = uniqueInstance;
+            end
+        end
+        function pth = sourcedataPathToDerivativesPath(pth)
+            pth = strrep(pth, 'sourcedata', 'derivatives');
+        end
+        function sub = workpath2subject(pth)
+            c = fileparts2cell(pth);
+            msk = contains(c, 'sub-');
+            sub = c(msk);
+        end
+    end  
+
     %% PRIVATE
 
     properties (Access = private)

@@ -6,7 +6,7 @@ classdef SessionData < mlnipet.MetabolicSessionData
  	%  by jjlee,
  	%  last modified $LastChangedDate$
  	%  and checked into repository /Users/jjlee/Local/src/mlcvl/mlvg/src/+mlvg.
- 	%% It was developed on Matlab 9.0.0.307022 (R2016a) Prerelease for MACI64.    
+    %% It was developed on Matlab 9.0.0.307022 (R2016a) Prerelease for MACI64.
         
     methods (Static)
         function t = consoleTaus(tracer)
@@ -224,41 +224,11 @@ classdef SessionData < mlnipet.MetabolicSessionData
                 g = this.scanFolder_;
                 return
             end
-
-            %% KLUDGE for bootstrapping
-            
-            if isempty(this.tracer_) || isempty(this.attenuationCorrected_)
-                g = '';
-                dt = datetime(datestr(now));
-                for globbed = globFoldersT(fullfile(this.sessionPath, '*_DT*.000000-Converted-*'))
-                    base = mybasename(globbed{1});
-                    re = regexp(base, ...
-                        '\S+_DT(?<yyyy>\d{4})(?<mm>\d{2})(?<dd>\d{2})(?<HH>\d{2})(?<MM>\d{2})(?<SS>\d{2})\.\d{6}-Converted\S*', ...
-                        'names');
-                    assert(~isempty(re))
-                    dt1 = datetime(str2double(re.yyyy), str2double(re.mm), str2double(re.dd), ...
-                        str2double(re.HH), str2double(re.MM), str2double(re.SS));
-                    if dt1 < dt
-                        dt = dt1; % find earliest scan
-                        g = base;
-                    end                    
-                end                
+            if ~isempty(this.tracer_)
+                g = 'pet';
                 return
             end
-            dtt = mlpet.DirToolTracer( ...
-                'tracer', fullfile(this.sessionPath, this.tracer_), ...
-                'ac', this.attenuationCorrected_);            
-            assert(~isempty(dtt.dns));
-            try
-                g = dtt.dns{this.scanIndex};
-            catch ME
-                if length(dtt.dns) < this.scanIndex 
-                    error('mlnipet:ValueError:getScanFolder', ...
-                        'SessionData.getScanFolder().this.scanIndex->%s', mat2str(this.scanIndex))
-                else
-                    rethrow(ME)
-                end
-            end
+            g = this.bootstrapScanFolder();
         end
         function this = set.scanFolder(this, s)
             assert(istext(s))
@@ -268,8 +238,12 @@ classdef SessionData < mlnipet.MetabolicSessionData
         function g    = get.dataPath(this)
             g = fullfile(this.subjectPath, this.dataFolder, '');
         end
-        function g    = get.dataFolder(~)
-            g = 'resampling_restricted';
+        function g    = get.dataFolder(this)
+            g = this.dataFolder_;
+        end
+        function this = set.dataFolder(this, s)
+            assert(istext(s));
+            this.dataFolder_ = s;
         end
 
         function g    = get.bids(this)
@@ -285,7 +259,8 @@ classdef SessionData < mlnipet.MetabolicSessionData
         %%
         
         function t = alternativeTaus(this)
-            t = mlvg.SessionData.consoleTaus(this.tracer);
+            reg = mlvg.Ccir1211Registry.instance();
+            t = reg.consoleTaus(this.tracer);
         end
         function p = petPointSpread(~, varargin)
             vis = mlsiemens.VisionRegistry.instance();
@@ -294,7 +269,10 @@ classdef SessionData < mlnipet.MetabolicSessionData
         function tracerRawdataLocation(~)
             error('mlvg:NotImplementedError', 'SessionData.tracerRawdataLocation');
         end
-        
+        function u = umapPath(this)
+            u = fullfile(this.scanPath);
+        end
+
       	function this = SessionData(varargin)
  			this = this@mlnipet.MetabolicSessionData(varargin{:}); 
             
@@ -319,6 +297,8 @@ classdef SessionData < mlnipet.MetabolicSessionData
             if isempty(this.projectData_)
                 this.projectData_ = mlvg.ProjectData('sessionStr', this.sessionFolder);
             end
+
+            this.dataFolder_ = 'resampling_restricted';
         end
     end
 
@@ -326,6 +306,7 @@ classdef SessionData < mlnipet.MetabolicSessionData
 
     properties (Access = private)
         bids_
+        dataFolder_
         imagingContext_
         registry_
     end

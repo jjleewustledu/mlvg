@@ -1,4 +1,4 @@
-classdef ProjectData < mlpipeline.ProjectData
+classdef ProjectData < mlpipeline.ProjectData2022
 	%% PROJECTDATA  
 
 	%  $Revision$
@@ -34,7 +34,7 @@ classdef ProjectData < mlpipeline.ProjectData
  			%% PROJECTDATA
  			%  @param .
 
- 			this = this@mlpipeline.ProjectData(varargin{:});
+ 			this = this@mlpipeline.ProjectData2022(varargin{:});
             this.projectFolder_ = 'CCIR_01211';
  		end
     end 

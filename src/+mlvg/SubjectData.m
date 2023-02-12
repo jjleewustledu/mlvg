@@ -1,4 +1,4 @@
-classdef SubjectData < mlnipet.SubjectData
+classdef SubjectData < mlnipet.SubjectData2022
 	%% SUBJECTDATA
 
 	%  $Revision$
@@ -14,7 +14,7 @@ classdef SubjectData < mlnipet.SubjectData
     methods (Static)
         function obj = createProjectData(varargin)
             obj = mlvg.ProjectData(varargin{:});
-        end
+        end        
         function subf = sesFolder2subFolder(sesf)
             %% requires well-defined cell-array mlvg.Ccir1211Registry.instance().subjectsJson.
             %  @param sesf is a session folder.
@@ -55,27 +55,25 @@ classdef SubjectData < mlnipet.SubjectData
             error('mlvg:ValueError', ...
                 'SubjectData.sesFolder2subFolder(%s) found no subject folder', sesf)
         end
+        function sesf = subFolder2sesFolder(subf)
+            sesf = mlvg.SubjectData.subFolder2sesFolders(subf);
+            if iscell(sesf)
+                sesf = sesf{1};
+            end
+        end
         function sesf = subFolder2sesFolders(subf)
             %% requires well-defined cell-array this.subjectsJson.
             %  @param subf is a subject folder.
             %  @returns first-found non-trivial session folder in the subject folder.
             
-            import mlvg.SubjectData
-            json = mlvg.Ccir1211Registry.instance().subjectsJson;
-            subjects = fields(json);
+            this = mlvg.SubjectData('subjectFolder', subf);
+            subjects = fields(this.subjectsJson_);
             ss = split(subf, '-');
             sesf = {};
-            for s = asrow(subjects)
-                subS = json.(s{1});
-                if lstrfind(subS.id, ss{2}) || lstrfind(subS.sid, ss{2})
-                    sesf = [sesf SubjectData.findExperiments(subS, subf)]; %#ok<AGROW>
-                end
-            end 
-        end
-        function sesf = subFolder2sesFolder(subf)
-            sesf = mlvg.SubjectData.subFolder2sesFolders(subf);
-            if iscell(sesf)
-                sesf = sesf{1};
+            subjectStruct = this.subjectsJson_.(strcat('x', ss{2}));
+            for d = asrow(fields(subjectStruct.dates))
+                dstr = subjectStruct.dates.(d{1});
+                sesf = [sesf strcat('ses-', dstr(1:8))]; %#ok<AGROW> 
             end
         end
     end
@@ -85,11 +83,11 @@ classdef SubjectData < mlnipet.SubjectData
  			%% SUBJECTDATA
  			%  @param .
 
- 			this = this@mlnipet.SubjectData(varargin{:});
+ 			this = this@mlnipet.SubjectData2022(varargin{:});
 
             this.studyRegistry_ = mlvg.Ccir1211Registry.instance;
             this.subjectsJson_ = this.studyRegistry_.subjectsJson;
- 		end
+        end
     end 
 
 	%  Created with Newcl by John J. Lee after newfcn by Frank Gonzalez-Morphy

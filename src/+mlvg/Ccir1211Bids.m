@@ -1,4 +1,4 @@
-classdef Ccir1211Bids < handle & mlvg.VisionBids
+classdef Ccir1211Bids < handle & mlsiemens.VisionBids
     %% Key functions:
     %  unpack_cnda() uses dcm2fileprefix(), info2*(), save_json().
     %  
@@ -19,9 +19,7 @@ classdef Ccir1211Bids < handle & mlvg.VisionBids
 
             % ensure dataPath ~ resampling_restricted
             dataPath = fullfile(ipr.subjectPath, 'resampling_restricted', '');
-            if ~isfolder(dataPath)
-                mkdir(dataPath)
-            end
+            ensuredir(dataPath)
 
             % generate 4dfp
             for nii = globFoldersT(fullfile(ipr.subjectPath, 'pet', 'ses-*', 'sub-*_ses-*_proc-dyn_pet_on_T1w.nii.gz'))
@@ -82,30 +80,22 @@ classdef Ccir1211Bids < handle & mlvg.VisionBids
             if contains(info.Modality, 'MR')
                 if contains(lower(info.SeriesDescription), 'fieldmap')
                     pth = fullfile(pth, 'fmap');
-                    if ~isfolder(pth)
-                        mkdir(pth)
-                    end
+                    ensuredir(pth)
                     return
                 end
                 if contains(lower(info.SeriesDescription), 'rest') || ...
                         contains(lower(info.SeriesDescription), 'ase')
                     pth = fullfile(pth, 'func');
-                    if ~isfolder(pth)
-                        mkdir(pth)
-                    end
+                    ensuredir(pth)
                     return
                 end
                 pth = fullfile(pth, 'anat');
-                if ~isfolder(pth)
-                    mkdir(pth)
-                end
+                ensuredir(pth)
                 return
             end
             if contains(info.Modality, 'CT') || contains(info.Modality, 'PT')
                 pth = fullfile(pth, 'pet');
-                if ~isfolder(pth)
-                    mkdir(pth)
-                end
+                ensuredir(pth)
             end
             % pth == /path/to/sub-123456 for unknown dicoms
         end
@@ -259,7 +249,7 @@ classdef Ccir1211Bids < handle & mlvg.VisionBids
             %      subjectFolder (text): is the BIDS-adherent string for subject identity.
             %      subjectFolder (text): is the BIDS-adherent string for subject identity.
             
-            this = this@mlvg.VisionBids(varargin{:})          
+            this = this@mlsiemens.VisionBids(varargin{:})          
 
             this.flair_toglob = fullfile(this.sourceAnatPath, 'sub-*_3D_FLAIR_Sag.nii.gz');
             this.pet_dyn_toglob = fullfile(this.sourcePetPath, 'sub-*_proc-dyn_pet.nii.gz');

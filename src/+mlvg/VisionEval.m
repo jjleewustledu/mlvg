@@ -48,9 +48,9 @@ classdef VisionEval
                 tracer2 = varargin{1};
             end
             
-            taus1 = mlvg.SessionData.consoleTaus(tracer1);
+            taus1 = mlvg.SessionData.taus(tracer1);
             timesMid1 = cumsum(taus1) - taus1/2;
-            taus2 = mlvg.SessionData.consoleTaus(tracer2);
+            taus2 = mlvg.SessionData.taus(tracer2);
             timesMid2 = cumsum(taus2) - taus2/2;
             
             h = figure; 
