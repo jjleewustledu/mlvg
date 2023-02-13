@@ -76,7 +76,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
                     end
                 end
             elseif ipr.Nthreads == 1
-                for p = length(theData):-1:1
+                for p = 1:1 %length(theData)
                     try
                         these{p} = construction(theData(p)); % RAM ~ 3.3 GB
                     catch ME
@@ -244,9 +244,6 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             
             popd(pwd0);
         end
-        function ps = petPointSpread()
-            ps = 3.57 * sqrt(0.5);
-        end
         function dt = physiologyObjToDatetime(obj)
             ic = mlfourd.ImagingContext2(obj);            
             ss = split(ic.fileprefix, '_');
@@ -326,7 +323,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             scannerBrain = scanner.volumeAveraged(icv);
             arterial = this.buildAif(devkit, scanner, scannerBrain);
             
-            fs_ = copy(icv.imagingFormat);
+            fs_ = icv.nifti;
             fs_.filepath = this.scanPath;
             ic = this.fsOnAtlas(tags=this.tags);
             fs_.fileprefix = ic.fileprefix;
@@ -363,7 +360,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             scannerBrain = scanner.volumeAveraged(icv); 
             arterial = this.buildAif(devkit, scanner, scannerBrain);
             
-            os_ = copy(icv.imagingFormat);
+            os_ = icv.nifti;
             os_.filepath = this.scanPath;
             ic = this.osOnAtlas(tags=this.tags);
             os_.fileprefix = ic.fileprefix;
@@ -401,7 +398,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             scannerBrain = scanner.volumeAveraged(icv);
             arterial = this.buildAif(devkit, scanner, scannerBrain);
             
-            vs_ = copy(icv.imagingFormat);
+            vs_ = icv.nifti;
             vs_.filepath = this.scanPath;
             obj = this.vsOnAtlas(tags=this.tags);
             vs_.fileprefix = obj.fileprefix;
