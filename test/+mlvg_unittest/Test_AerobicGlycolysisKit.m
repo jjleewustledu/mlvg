@@ -22,8 +22,8 @@ classdef Test_AerobicGlycolysisKit < matlab.unittest.TestCase
             this.assertEqual(1,1);
         end
         function test_construct(this)
-            these = mlvg.QuadraticAerobicGlycolysisKit.construct('cmro2');
-            disp(these)  
+            these = mlvg.QuadraticAerobicGlycolysisKit.construct('cmrglc');
+            disp(these)
         end
         function test_constructData(this)
             theData = mlvg.QuadraticAerobicGlycolysisKit.constructData( ...

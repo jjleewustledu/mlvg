@@ -55,6 +55,11 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
                     metric = 'os';
                     region = ipr.region;
                     construction = @QuadraticAerobicGlycolysisKit.constructCmro2ByRegion;
+                case 'cmrglc'
+                    tracer = 'fdg';
+                    metric = 'ks';
+                    region = 'wmparc1';
+                    construction = @QuadraticAerobicGlycolysisKit.constructCmrglcByRegion;
                 otherwise
                     error('mlvg:RuntimeError', 'QuadraticAerobicGlycolysisKit.construct.ipr.physiology->%s', ipr.physiology)
             end
@@ -88,13 +93,13 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
         end
         function this = constructCbfByRegion(varargin)
             %% CONSTRUCTCBFBYREGION
-            %  @param required imagingData is mlpipeline.ImagingData.
+            %  @param required immediator is mlpipeline.ImagingMediator.
             %  @return cbf on filesystem.
             
             this = mlvg.QuadraticAerobicGlycolysisKit(varargin{:});            
-            Region = [upper(this.imagingData.regionTag(1)) this.imagingData.regionTag(2:end)];
+            Region = [upper(this.immediator.regionTag(1)) this.immediator.regionTag(2:end)];
 
-            pwd0 = pushd(this.imagingData.subjectPath);
+            pwd0 = pushd(this.immediator.subjectPath);
             fs_ = this.(['buildFsBy' Region])();             
             cbf_ = this.fs2cbf(fs_);
             cbf_.save() % save ImagingContext2            
@@ -102,36 +107,72 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
         end
         function this = constructCbvByRegion(varargin)
             %% CONSTRUCTCBVBYREGION
-            %  @param required imagingData is mlpipeline.ImagingData.
+            %  @param required immediator is mlpipeline.ImagingMediator.
             %  @return cbv on filesystem.
             
             this = mlvg.QuadraticAerobicGlycolysisKit(varargin{:});
-            Region = [upper(this.imagingData.regionTag(1)) this.imagingData.regionTag(2:end)];
+            Region = [upper(this.immediator.regionTag(1)) this.immediator.regionTag(2:end)];
 
-            pwd0 = pushd(this.imagingData.subjectPath);            
+            pwd0 = pushd(this.immediator.subjectPath);            
             vs_ = this.(['buildVsBy' Region])(); 
             cbv_ = this.vs2cbv(vs_);
             cbv_.save() % save ImagingContext2
             popd(pwd0);
         end 
+        function this = constructCmrglcByRegion(varargin)
+            %% CONSTRUCTCMRGLCBYREGION
+            %  @param required immediator.
+            %  @param required another immediator for augmentation by averaging.
+            %  @return ks on filesystem.
+            %  @return aifs on filesystem.
+            %  @return cmrglc on filesystem.
+            
+            this = mlvg.QuadraticAerobicGlycolysisKit(varargin{:});
+            Region = [upper(this.immediator.regionTag(1)) this.immediator.regionTag(2:end)];
+
+            pwd0 = pushd(this.immediator.subjectPath);   
+            
+            % build Ks and their masks           
+            [ks_,aifs_] = this.(['buildKsBy' Region])();
+            cbv_ = this.metricOnAtlas('cbv', tags='voxels');
+            cmrglc_ = this.ks2cmrglc(ks_, cbv_, this.model);     
+            cmro2_ = this.metricOnAtlas('cmro2', tags='voxels');
+            brain_ = this.metricOnAtlas('brain');
+            ogi_ = cmro2_ ./ cmrglc_;
+            ogi_.fileprefix = this.metricOnAtlas('ogi').fileprefix;
+            mu = mean(ogi_.nifti.img(brain_.nifti.img));
+            sigma = std(ogi_.nifti.img(brain_.nifti.img));
+            ogi_z = (ogi_ - mu)/sigma;
+            ogi_z.fileprefix = this.metricOnAtlas('ogi-zscore').fileprefix;
+            
+            agi_ = cmrglc_ - cmro2_/6;
+            agi_.fileprefix = this.metricOnAtlas('agi').fileprefix;
+            mu = mean(agi_.nifti.img(brain_.nifti.img));
+            sigma = std(agi_.nifti.img(brain_.nifti.img));
+            agi_z = (agi_ - mu)/sigma;
+            agi_z.fileprefix = this.metricOnAtlas('agi-zscore').fileprefix;            
+            
+            % save ImagingContext2
+            ks_.save()
+            aifs_.save()
+            cmrglc_.save()     
+            ogi_.save()
+            ogi_z.save()
+            agi_.save()
+            agi_z.save()
+            
+            popd(pwd0);
+        end
         function this = constructCmro2ByRegion(varargin)
             %% CONSTRUCTCMRO2BYREGION
-            %  @param required imagingData is mlpipeline.ImagingData.
+            %  @param required immediator is mlpipeline.ImagingMediator.
             %  @return cmro2 on filesystem.
             %  @return oef on filesystem.
             
-            this = mlvg.QuadraticAerobicGlycolysisKit(varargin{:});            
-%             this.constructPhysiologyDateOnly('cbf', ...
-%                 'subjectFolder', this.imagingData.subjectFolder, ...
-%                 'region', this.imagingData.regionTag, ...
-%                 'imagingData', this.imagingData)
-%             this.constructPhysiologyDateOnly('cbv', ...
-%                 'subjectFolder', this.imagingData.subjectFolder, ...
-%                 'region', this.imagingData.regionTag, ...
-%                 'imagingData', this.imagingData)
-            Region = [upper(this.imagingData.regionTag(1)) this.imagingData.regionTag(2:end)];
+            this = mlvg.QuadraticAerobicGlycolysisKit(varargin{:});
+            Region = [upper(this.immediator.regionTag(1)) this.immediator.regionTag(2:end)];
 
-            pwd0 = pushd(this.imagingData.subjectPath);             
+            pwd0 = pushd(this.immediator.subjectPath);             
             os_ = this.(['buildOsBy' Region])();   
             cbf_ = this.cbfOnAtlas( ...
                 'typ', 'mlfourd.ImagingContext2', ...
@@ -166,10 +207,10 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             end            
         end 
         function ic = constructPhysiologyDateOnly(varargin)
-            %% e.g., constructPhysiologyDateOnly('cbv', 'imagingData', obj) % pwd includes sub-108293            
-            %  e.g., constructPhysiologyDateOnly('cbv', 'imagingData', obj, ...
+            %% e.g., constructPhysiologyDateOnly('cbv', 'immediator', obj) % pwd includes sub-108293            
+            %  e.g., constructPhysiologyDateOnly('cbv', 'immediator', obj, ...
             %                                    'workpath', '/path/to/sub-108293/resampling_restricted')
-            %  e.g., constructPhysiologyDateOnly('cbv', 'imagingData', obj, ...
+            %  e.g., constructPhysiologyDateOnly('cbv', 'immediator', obj, ...
             %                                    'workpath', '/path/to/sub-108293/resampling_restricted', ...
             %                                    'filepatt', 'ocdt2021*_111_voxels.4dfp.hdr')
             
@@ -178,7 +219,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             reg = mlvg.Ccir1211Registry.instance();
             ip = inputParser;
             addRequired(ip, 'physiology', @istext)
-            addParameter(ip, 'imagingData', [], @(x) isa(x, 'mlpipeline.ImagingData'))
+            addParameter(ip, 'immediator', [], @(x) isa(x, 'mlpipeline.ImagingData') || isa(x, 'mlpipeline.ImagingMediator'))
             addParameter(ip, 'workpath', pwd, @isfolder)
             addParameter(ip, 'subjectFolder', '', @istext) 
             addParameter(ip, 'filepatt', '', @istext)
@@ -204,7 +245,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             
             m = containers.Map;            
             for ig = 1:length(g)
-                if contains(g{ig}, ipr.imagingData.defects)
+                if contains(g{ig}, ipr.immediator.defects)
                     continue
                 end
                 dstr = AbstractAerobicGlycolysisKit.physiologyObjToDatetimeStr(g{ig}, 'dateonly', true);
@@ -285,22 +326,22 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             g = mlvg.Ccir1211Registry.instance.blurTag;
         end
         function g = get.scanFolder(this)
-            g = this.imagingData.scanFolder;
+            g = this.immediator.scanFolder;
         end  
         function g = get.scanPath(this)
-            g = this.imagingData.scanPath;
+            g = this.immediator.scanPath;
         end  
         function g = get.registry(this)
             g = mlvg.CCIR1211Registry.instance();
         end
         function g = get.regionTag(this)
-            g = this.imagingData.regionTag;
+            g = this.immediator.regionTag;
         end
         function g = get.subjectFolder(this)
-            g = this.imagingData.subjectFolder;
+            g = this.immediator.subjectFolder;
         end
         function g = get.subjectPath(this)
-            g = this.imagingData.subjectPath;
+            g = this.immediator.subjectPath;
         end
         function g = get.tags(this)
             g = strcat(this.blurTag, this.regionTag);
@@ -318,7 +359,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             pwd0 = pushd(this.scanPath);  
                                     
             icv = this.dlicv();
-            devkit = mlpet.ScannerKit.createFromSession(this.imagingData);             
+            devkit = mlpet.ScannerKit.createFromSession(this.immediator);             
             scanner = devkit.buildScannerDevice();
             scannerBrain = scanner.volumeAveraged(icv);
             arterial = this.buildAif(devkit, scanner, scannerBrain);
@@ -345,6 +386,87 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             fs_ = mlfourd.ImagingContext2(fs_);
             popd(pwd0);
         end 
+        function [ks_,aifs_] = buildKsByWmparc1(this, varargin)
+            %% BUILDKSBYWMPARC1
+            %  @return ks_ in R^4 as mlfourd.ImagingContext2, without saving to filesystems.  
+            %  @return cbv_ in R^3, without saving.
+            %  @return aifs_ in R^4, without saving.
+            
+            import mlglucose.DispersedNumericHuang1980
+            
+            ensuredir(this.scanPath);
+            pwd0 = pushd(this.scanPath);
+                                    
+            icv = this.dlicv();      
+            wmparc1 = this.wmparc1OnAtlas( ...
+                datetime=this.bids.filename2datetime(icv.filename));
+            devkit = mlpet.ScannerKit.createFromSession(this.immediator); 
+            scanner = devkit.buildScannerDevice();
+            scannerBrain = scanner.volumeAveraged(icv);          
+            arterial = this.buildAif(devkit, scanner, scannerBrain);
+                        
+            ks_ = wmparc1.nifti;
+            ks_.filepath = this.scanPath;
+            ic = this.ksOnAtlas(tags=this.tags);
+            ks_.fileprefix = ic.fileprefix;            
+            lenKs = mlglucose.DispersedNumericHuang1980.LENK;
+            ks_.img = zeros([size(wmparc1) lenKs], 'single');   
+
+            aifs_ = copy(ks_);
+            ic = this.aifsOnAtlas(tags=this.tags);
+            aifs_.fileprefix = ic.fileprefix;
+            aifs_.img = single(0); 
+
+            cbv = this.cbvOnAtlas();        
+
+            for idx = this.indices % parcs
+
+                tic 
+
+                % for parcs, build roibin as logical, roi as single 
+                fprintf('%s\n', datestr(now))
+                fprintf('starting mlraichle.DispersedAerobicGlycolysisKit.buildKsByWmparc1.idx -> %i\n', idx)
+                roi = mlfourd.ImagingContext2(wmparc1);
+                roi = roi.numeq(idx);
+                ic = this.roiOnAtlas(idx, tags='wmparc1');
+                roi.fileprefix = ic.fileprefix;
+                if 0 == dipsum(roi)
+                    continue
+                end
+
+                % solve Huang
+                huang = DispersedNumericHuang1980.createFromDeviceKit( ...
+                    devkit, ...
+                    'scanner', scanner, ...
+                    'arterial', arterial, ...
+                    'cbv', cbv, ...
+                    'roi', roi); 
+                    % arterial must be cell to dispatch to DispersedNumericHuang1980.createFromDualDeviceKit()
+                huang = huang.solve(@mlglucose.DispersedHuang1980Model.loss_function);
+                this.model = huang.model;
+
+                % insert Huang solutions into ks
+                ks_.img = ks_.img + huang.ks_mediated().img;
+                
+                % collect delay & dipsersion adjusted aifs
+                aifs_.img = aifs_.img + huang.artery_local_mediated().img;
+
+                toc
+
+                % Dx
+                
+                if any(idx == this.indicesToCheck)  
+                    h = huang.plot();
+                    this.savefig(h, idx)
+                end                    
+            end
+            
+            ks_ = mlfourd.ImagingContext2(ks_);
+            ks_.ensureSingle();
+            aifs_ = mlfourd.ImagingContext2(aifs_);
+            aifs_.ensureSingle();
+            popd(pwd0);
+        end
         function os_ = buildOsByVoxels(this, varargin)
             %% BUILDOSBYVOXELS
             %  @return os in R^4 as mlfourd.ImagingContext2, without saving to filesystems.  
@@ -355,7 +477,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             pwd0 = pushd(this.scanPath);  
                                     
             icv = this.dlicv();
-            devkit = mlpet.ScannerKit.createFromSession(this.imagingData);            
+            devkit = mlpet.ScannerKit.createFromSession(this.immediator);            
             scanner = devkit.buildScannerDevice(); 
             scannerBrain = scanner.volumeAveraged(icv); 
             arterial = this.buildAif(devkit, scanner, scannerBrain);
@@ -393,7 +515,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             pwd0 = pushd(this.scanPath);                                    
             
             icv = this.dlicv();
-            devkit = mlpet.ScannerKit.createFromSession(this.imagingData);             
+            devkit = mlpet.ScannerKit.createFromSession(this.immediator);             
             scanner = devkit.buildScannerDevice();
             scannerBrain = scanner.volumeAveraged(icv);
             arterial = this.buildAif(devkit, scanner, scannerBrain);
@@ -420,9 +542,6 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             vs_ = mlfourd.ImagingContext2(vs_);
             popd(pwd0);
         end
-        function obj = dlicv(this, varargin)
-            obj = this.imagingData.bids.dlicv_ic;
-        end
         function obj = metricOnAtlas(this, metric, varargin)
             %% METRICONATLAS appends fileprefixes with information from this.dataAugmentation
             %  @param required metric is char.
@@ -433,14 +552,14 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             ip = inputParser;
             ip.KeepUnmatched = true;
             addRequired(ip, 'metric', @ischar)
-            addParameter(ip, 'datetime', this.imagingData.datetime, @(x) isdatetime(x) || ischar(x))
+            addParameter(ip, 'datetime', this.immediator.datetime, @(x) isdatetime(x) || ischar(x))
             addParameter(ip, 'dateonly', false, @islogical)
             addParameter(ip, 'tags', '', @ischar)
             parse(ip, metric, varargin{:})
             ipr = ip.Results;
 
             try
-                g = glob(fullfile(this.imagingData.scanPath, ...
+                g = glob(fullfile(this.immediator.scanPath, ...
                     sprintf('*_%s_*%s*.nii.gz', metric, ipr.tags)));
                 if ~isempty(g)
                     obj = mlfourd.ImagingContext2(g{1});
@@ -464,11 +583,11 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
                 end
             end
             
-            s = this.imagingData.bids.filename2struct(this.imagingData.imagingContext.fqfn);
+            s = this.bids.filename2struct(this.immediator.imagingContext.fqfn);
             s.ses = adatestr;
             s.modal = ipr.metric;
             s.tag = ipr.tags;
-            fqfn = this.imagingData.bids.struct2filename(s);
+            fqfn = this.bids.struct2filename(s);
             obj = mlfourd.ImagingContext2(fqfn);
         end	  
     end
@@ -479,7 +598,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
         function this = QuadraticAerobicGlycolysisKit(varargin)
             %% QUADRATICAEROBICGLYCOLYSISKIT 
             %  Args:
-            %      imagingData (ImagingData): session-specific objects
+            %      immediator (ImagingMediator): session-specific objects
             %      aifMethods: containers.Map
             
             this = this@mlpet.AbstractAerobicGlycolysisKit2(varargin{:})

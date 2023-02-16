@@ -46,6 +46,8 @@ classdef Ccir1211Scan < mlpipeline.ScanData2 & handle
         end
         function dt = datetime(this, varargin)
             dt = this.datetime_bids_filename(varargin{:});
+            deltadt = seconds(this.mediator_.timeOffsetConsole);
+            dt = dt - deltadt;
         end
         function ic = metricOnAtlas(this, metric, tags)
             %% METRICONATLAS forms an ImagingContext2 with modality->metric

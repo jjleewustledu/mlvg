@@ -9,10 +9,25 @@ classdef Ccir1211Session < mlpipeline.SessionData2 & handle
         defects = {}
     end
 
+    properties (Dependent)
+    end
+
+    methods % GET
+    end
+
     methods
         function this = Ccir1211Session(varargin)
             this = this@mlpipeline.SessionData2(varargin{:});
             this.registry_ = mlsiemens.VisionRegistry.instance();
+        end
+    end
+
+    %% PROTECTED
+
+    methods (Access = ?mlpipeline.SessionData2)
+        function buildRadmeasurements(this)
+            this.radMeasurements_ = mlpet.CCIRRadMeasurements2.createFromSession( ...
+                this.mediator_);
         end
     end
     
