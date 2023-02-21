@@ -84,8 +84,10 @@ classdef Ccir1211Scan < mlpipeline.ScanData2 & handle
                     t = [5*ones(1,24) 20*ones(1,9) 60*ones(1,10) 300*ones(1,9)];
                 case {'oo' 'ho'}
                     t = [3*ones(1,23) 5*ones(1,6) 10*ones(1,8) 30*ones(1,6)];
+%                    t = [];
                 case {'oc' 'co'}
                     t = [15 60*ones(1,5)];
+%                    t = [];
                 otherwise
                     error('mlvg:IndexError', 'SessionData.consoleTaus.tracer->%s', tracer);
             end
