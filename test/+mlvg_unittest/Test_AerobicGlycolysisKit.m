@@ -22,8 +22,8 @@ classdef Test_AerobicGlycolysisKit < matlab.unittest.TestCase
             this.assertEqual(1,1);
         end
         function test_construct(this)
-            these = mlvg.QuadraticAerobicGlycolysisKit.construct('cmrglc');
-            disp(these)
+           these = mlvg.QuadraticAerobicGlycolysisKit.construct('cmrglc-posthoc');
+           disp(these)
         end
         function test_constructData(this)
             theData = mlvg.QuadraticAerobicGlycolysisKit.constructData( ...
@@ -136,13 +136,45 @@ classdef Test_AerobicGlycolysisKit < matlab.unittest.TestCase
             plotall(td)
             %disp(td)
         end
+
+        function test_view(this)
+            t1w = this.immediator.t1w_ic;
+            wmparc = this.immediator.wmparc_on_t1w_ic;
+            mask = wmparc.binarized();
+            mask = mask.blurred(3.45);
+            mask = mask.thresh(0.1);
+
+            ics = containers.Map;
+            ics('cbv') = mlfourd.ImagingContext2( ...
+                fullfile(this.petPath, ...
+                'sub-108293_ses-20210421144815_cbv_proc-dyn_pet_on_T1w_voxels.nii.gz'));
+            ics('cbf') = mlfourd.ImagingContext2( ...
+                fullfile(this.petPath, ...
+                'sub-108293_ses-20210421152358_cbf_proc-dyn_pet_on_T1w_voxels.nii.gz'));
+            ics('cmro2') = mlfourd.ImagingContext2( ...
+                fullfile(this.petPath, ...
+                'sub-108293_ses-20210421150523_cmro2-umol_proc-dyn_pet_on_T1w_voxels.nii.gz'));
+            ics('cmrglc') = mlfourd.ImagingContext2( ...
+                fullfile(this.petPath, ...
+                'sub-108293_ses-20210421155638_cmrglc-umol_proc-dyn_pet_on_T1w_wmparc1.nii.gz'));
+            ics('agi') = mlfourd.ImagingContext2( ...
+                fullfile(this.petPath, ...
+                'sub-108293_ses-20210421155638_agi_proc-dyn_pet_on_T1w.nii.gz'));
+        
+            for k = ics.keys
+                ics(k{1}) = ics(k{1}).blurred(3.45);
+                ics(k{1}) = ics(k{1}) .* mask;
+                t1w.view(ics(k{1}))
+            end
+        
+        end
     end
     
     methods (TestClassSetup)
         function setupAerobicGlycolysisKit(this)
-            setenv('SUBJECTS_DIR', '~/Singularity/CCIR_01211/derivatives')
+%            setenv('SINGULARITY_HOME', '/home/usr/jjlee/mnt/CHPC_scratch/Singularity')
             import mlvg.*
-            this.subjectPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/derivatives/sub-108293');
+            this.subjectPath = fullfile(getenv('SINGULARITY_HOME'), 'CCIR_01211/derivatives/sub-108293');
             this.sessionPath = fullfile(this.subjectPath, 'ses-20210421');
             this.petPath = fullfile(this.sessionPath, 'pet');
             this.testObj_ = []; % must call abstract factory's construct*() methods.
@@ -152,8 +184,8 @@ classdef Test_AerobicGlycolysisKit < matlab.unittest.TestCase
     methods (TestMethodSetup)
         function setupAerobicGlycolysisKitTest(this)
             this.testObj = this.testObj_;
-            this.ho_dyn_fqfn = '/Users/jjlee/Singularity/CCIR_01211/derivatives/sub-108293/ses-20210421/pet/sub-108293_ses-20210421152358_trc-ho_proc-dyn_pet_on_T1w.nii.gz';
-            this.oc_avgt_fqfn = '/Users/jjlee/Singularity/CCIR_01211/derivatives/sub-108293/ses-20210421/pet/sub-108293_ses-20210421144815_trc-oc_proc-dyn_pet_avgt_b25_on_T1w.nii.gz';
+            this.ho_dyn_fqfn = fullfile(getenv('SINGULARITY_HOME'), 'CCIR_01211/derivatives/sub-108293/ses-20210421/pet/sub-108293_ses-20210421152358_trc-ho_proc-dyn_pet_on_T1w.nii.gz');
+            this.oc_avgt_fqfn = fullfile(getenv('SINGULARITY_HOMEd'), 'CCIR_01211/derivatives/sub-108293/ses-20210421/pet/sub-108293_ses-20210421144815_trc-oc_proc-dyn_pet_avgt_b25_on_T1w.nii.gz');
             this.immediator = mlvg.Ccir1211Mediator(this.ho_dyn_fqfn);
             this.addTeardown(@this.cleanTestMethod)
         end

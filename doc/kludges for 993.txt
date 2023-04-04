@@ -1,0 +1,7 @@
+kludges for 993
+---------------
+
+Ccir1211Scan.taus
+Ccir1211Bids.ctor
+Ccir1211Registry.subjectsJson
+AbstractDevice.findCalibrationSession

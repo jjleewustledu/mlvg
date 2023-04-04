@@ -32,6 +32,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             addParameter(ip, 'region', 'voxels', @istext)
             addParameter(ip, 'debug', ~isempty(getenv('DEBUG')), @islogical)
             addParameter(ip, 'Nthreads', 1, @(x) isnumeric(x) || istext(x))
+            addParameter(ip, 'Nimages', inf, @isnumeric)
             parse(ip, varargin{:})
             ipr = ip.Results;
             if istext(ipr.Nthreads)
@@ -60,6 +61,11 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
                     metric = 'ks';
                     region = 'wmparc1';
                     construction = @QuadraticAerobicGlycolysisKit.constructCmrglcByRegion;
+                case 'cmrglc-posthoc'
+                    tracer = 'fdg';
+                    metric = 'ks';
+                    region = 'wmparc1';
+                    construction = @QuadraticAerobicGlycolysisKit.constructCmrglcByRegionPosthoc;
                 otherwise
                     error('mlvg:RuntimeError', 'QuadraticAerobicGlycolysisKit.construct.ipr.physiology->%s', ipr.physiology)
             end
@@ -81,7 +87,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
                     end
                 end
             elseif ipr.Nthreads == 1
-                for p = 1:1 %length(theData)
+                for p = 1:min(length(theData), ipr.Nimages)
                     try
                         these{p} = construction(theData(p)); % RAM ~ 3.3 GB
                     catch ME
@@ -134,32 +140,130 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             
             % build Ks and their masks           
             [ks_,aifs_] = this.(['buildKsBy' Region])();
+            ks_.save();
+            aifs_.save();
+
             cbv_ = this.metricOnAtlas('cbv', tags='voxels');
-            cmrglc_ = this.ks2cmrglc(ks_, cbv_, this.model);     
-            cmro2_ = this.metricOnAtlas('cmro2', tags='voxels');
-            brain_ = this.metricOnAtlas('brain');
-            ogi_ = cmro2_ ./ cmrglc_;
-            ogi_.fileprefix = this.metricOnAtlas('ogi').fileprefix;
-            mu = mean(ogi_.nifti.img(brain_.nifti.img));
-            sigma = std(ogi_.nifti.img(brain_.nifti.img));
-            ogi_z = (ogi_ - mu)/sigma;
-            ogi_z.fileprefix = this.metricOnAtlas('ogi-zscore').fileprefix;
+            cbv_ = cbv_.uthresh(10.8);
+            cmrglc_ = this.ks2cmrglc(ks_, cbv_, this.model);    
+            cmrglc_.save()   
+            cmro2__ = this.metricOnAtlas('cmro2', tags='voxels');
+            cmro2_ = cmro2__ * 44.64; % mL O2 -> umol O2
+            cmro2_.fileprefix = strrep(cmro2__.fileprefix, 'cmro2', 'cmro2-umol');
+            cmro2_.save()
+            brain_ = this.immediator.wmparc_on_t1w_ic;
+            brain_ = brain_.binarized();
             
+            % build agi
             agi_ = cmrglc_ - cmro2_/6;
             agi_.fileprefix = this.metricOnAtlas('agi').fileprefix;
-            mu = mean(agi_.nifti.img(brain_.nifti.img));
-            sigma = std(agi_.nifti.img(brain_.nifti.img));
+            agi_.save()
+            mu = mean(agi_.nifti.img(brain_.logical));
+            sigma = std(agi_.nifti.img(brain_.logical));
             agi_z = (agi_ - mu)/sigma;
-            agi_z.fileprefix = this.metricOnAtlas('agi-zscore').fileprefix;            
+            agi_z.fileprefix = this.metricOnAtlas('agi-zscore').fileprefix;  
+            agi_z.save()  
+
+            % build ogi
+            ogi_ = cmro2_ ./ cmrglc_;
+            ogi_ = ogi_.scrubNanInf;
+            ogi_.fileprefix = this.metricOnAtlas('ogi').fileprefix;
+            ogi_.save()
+            mu = mean(ogi_.nifti.img(brain_.logical));
+            sigma = std(ogi_.nifti.img(brain_.logical));
+            ogi_z = (ogi_ - mu)/sigma;
+            ogi_z.fileprefix = this.metricOnAtlas('ogi-zscore').fileprefix;  
+            ogi_z.save()        
             
             % save ImagingContext2
-            ks_.save()
-            aifs_.save()
-            cmrglc_.save()     
-            ogi_.save()
-            ogi_z.save()
+            %ks_.save()
+            %aifs_.save() 
+            
+            popd(pwd0);
+        end        
+        function this = constructCmrglcByRegionPosthoc(varargin)
+            %% CONSTRUCTCMRGLCBYREGION
+            %  @param required immediator.
+            %  @param required another immediator for augmentation by averaging.
+            %  @return ks on filesystem.
+            %  @return aifs on filesystem.
+            %  @return cmrglc on filesystem.
+
+            this = mlvg.QuadraticAerobicGlycolysisKit(varargin{:});
+            if isempty(this.model)
+                ld = load(fullfile(getenv('SINGULARITY_HOME'), ...
+                    'CCIR_01211/derivatives/sub-108293/ses-20210421/pet/model.mat'), 'model');
+                this.model = ld.model;
+            end
+
+            pwd0 = pushd(this.immediator.subjectPath);               
+            
+            t1w = this.immediator.t1w_ic;
+
+            mask_ = this.immediator.wmparc_on_t1w_ic;
+            mask_ = mask_.binarized();
+            mask_ = mask_.blurred(3.45);
+            mask_ = mask_.thresh(0.1);
+
+            % build uthreshed cbv, ks, cmrglc
+            cbv_ = this.metricOnAtlas('cbv', tags='voxels');
+            cbv_ = cbv_.uthresh(10.8); % minimizes venous sinus artifacts
+            cbv_ = cbv_.blurred(3.45);
+            cbv_.save()
+            disp('t1w.view(cbv_ .* mask_)')
+            t1w.view(cbv_ .* mask_)            
+
+            ks_ = this.ksOnAtlas(tags=this.tags);
+            ks_ = ks_.blurred(3.45);
+            ks_.save();
+
+            cmrglc_ = this.ks2cmrglc(ks_, cbv_, this.model);    
+            cmrglc_.save() 
+            disp('t1w.view(cmrglc_ .* mask_)')
+            t1w.view(cmrglc_ .* mask_)
+
+            % build molar cmro2
+            cmro2__ = this.metricOnAtlas('cmro2', tags='voxels');
+            cmro2__ = cmro2__.blurred(3.45);
+            cmro2_ = cmro2__ * 44.64; % mL O2 -> umol O2
+            cmro2_.fileprefix = strrep(cmro2__.fileprefix, 'cmro2', 'cmro2-umol');
+            cmro2_.save()
+            disp('t1w.view(cmro2_ .* mask_)')
+            t1w.view(cmro2_ .* mask_)
+            
+            % build agi
+            agi_ = cmrglc_ - cmro2_/6;
+            agi_.fileprefix = this.metricOnAtlas('agi').fileprefix;
             agi_.save()
-            agi_z.save()
+            disp('t1w.view(agi_ .* mask_)')
+            t1w.view(agi_ .* mask_)
+
+            mu = mean(agi_.nifti.img(mask_.logical));
+            sigma = std(agi_.nifti.img(mask_.logical));
+            agi_z = (agi_ - mu)/sigma;
+            agi_z.fileprefix = this.metricOnAtlas('agi-zscore').fileprefix;  
+            agi_z.save()  
+
+            % build ogi
+            ogi_ = cmro2_ ./ cmrglc_;
+            ogi_ = ogi_.scrubNanInf;
+            ogi_.fileprefix = this.metricOnAtlas('ogi').fileprefix;
+            ogi_.save()
+            disp('t1w.view(ogi_ .* mask_)')
+            t1w.view(ogi_ .* mask_)
+
+            mu = mean(ogi_.nifti.img(mask_.logical));
+            sigma = std(ogi_.nifti.img(mask_.logical));
+            ogi_z = (ogi_ - mu)/sigma;
+            ogi_z.fileprefix = this.metricOnAtlas('ogi-zscore').fileprefix;  
+            ogi_z.save()     
+
+            % check cbfcbv_ = this.metricOnAtlas('cbv', tags='voxels');
+            cbf_ = this.metricOnAtlas('cbf', tags='voxels');
+            cbf_ = cbf_.blurred(3.45);
+            cbf_.save()
+            disp('t1w.view(cbf_ .* mask_)')
+            t1w.view(cbf_ .* mask_)       
             
             popd(pwd0);
         end
@@ -179,8 +283,10 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
                 'dateonly', false, ...
                 'tags', [this.blurTag this.regionTag]);
             [cmro2_,oef_] = this.os2cmro2(os_, cbf_, this.model);
+            cmro2_ = this.applyBrainMask(cmro2_);
             cmro2_.save() % save ImagingContext2
-            oef_.save()            
+            oef_ = this.applyBrainMask(oef_);
+            oef_.save()      
             popd(pwd0);
         end 
         function dat = constructData(varargin)
@@ -197,7 +303,8 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             idx = 1;
             scans = glob(fullfile( ...
                 getenv('SUBJECTS_DIR'), ipr.subjectsExpr, ipr.sessionsExpr, ...
-                sprintf('*_trc-%s_proc-dyn_pet_on_T1w.nii.gz', ipr.tracer)))';
+                sprintf('*_trc-%s_proc-dyn*_pet_%s.nii.gz', ...
+                ipr.tracer, mlvg.Ccir1211Registry.instance().atlasTag)))';
             for s = scans
                 dat_ = mlvg.Ccir1211Mediator(s{1}); %#ok<AGROW>
                 dat_.metric = ipr.metric;
@@ -349,6 +456,12 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
     end
 
     methods
+        function obj = applyBrainMask(this, obj)
+            msk = this.dlicv();
+            fp = obj.fileprefix;
+            obj = obj .* msk;
+            obj.fileprefix = strrep(fp, '_pet', '-dlicv_pet');            
+        end
         function fs_ = buildFsByVoxels(this, varargin)
             %% BUILDFSBYVOXELS
             %  @return fs in R^4 as mlfourd.ImagingContext2, without saving to filesystems.  
@@ -417,18 +530,26 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             aifs_.fileprefix = ic.fileprefix;
             aifs_.img = single(0); 
 
-            cbv = this.cbvOnAtlas();        
-
-            for idx = this.indices % parcs
+            cbv = this.cbvOnAtlas();
+            aifs_img_ = aifs_.img;
+            ks_img_ = ks_.img;
+            indices_ = this.indices;
+            this_roiOnAtlas_ = @this.roiOnAtlas;
+            this_indicesToCheck_ = this.indicesToCheck;
+            this_savefig_ = @this.savefig;
+            models = cell(size(indices_));
+            for ii = 1:length(indices_) % parcs
+ 
+                idx = indices_(ii);
 
                 tic 
 
                 % for parcs, build roibin as logical, roi as single 
-                fprintf('%s\n', datestr(now))
+                %fprintf('%s\n', datestr(now))
                 fprintf('starting mlraichle.DispersedAerobicGlycolysisKit.buildKsByWmparc1.idx -> %i\n', idx)
                 roi = mlfourd.ImagingContext2(wmparc1);
                 roi = roi.numeq(idx);
-                ic = this.roiOnAtlas(idx, tags='wmparc1');
+                ic = this_roiOnAtlas_(idx, tags='wmparc1');
                 roi.fileprefix = ic.fileprefix;
                 if 0 == dipsum(roi)
                     continue
@@ -443,23 +564,26 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
                     'roi', roi); 
                     % arterial must be cell to dispatch to DispersedNumericHuang1980.createFromDualDeviceKit()
                 huang = huang.solve(@mlglucose.DispersedHuang1980Model.loss_function);
-                this.model = huang.model;
+                models{ii} = huang.model;
 
                 % insert Huang solutions into ks
-                ks_.img = ks_.img + huang.ks_mediated().img;
+                ks_img_ = ks_img_ + huang.ks_mediated().img;
                 
                 % collect delay & dipsersion adjusted aifs
-                aifs_.img = aifs_.img + huang.artery_local_mediated().img;
+                aifs_img_ = aifs_img_ + huang.artery_local_mediated().img;
 
                 toc
 
                 % Dx
                 
-                if any(idx == this.indicesToCheck)  
+                if any(idx == this_indicesToCheck_)  
                     h = huang.plot();
-                    this.savefig(h, idx)
+                    this_savefig_(h, idx)
                 end                    
             end
+            this.model = models{end};
+            ks_.img = ks_img_;
+            aifs_.img = aifs_img_;
             
             ks_ = mlfourd.ImagingContext2(ks_);
             ks_.ensureSingle();

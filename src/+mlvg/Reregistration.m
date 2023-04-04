@@ -8,7 +8,7 @@ classdef Reregistration < handle
  	
 	properties
         epsilon = 1e-2
-        idxmax = 7 % cf. pcregistermax()
+        idxmax = 7 % max # of rigid body searches; cf. pcregistermax()
         mmppix
         Niterations = 3 % max # of translational searches
  		radius % cf. sampleActivity()
@@ -246,7 +246,7 @@ classdef Reregistration < handle
             h = figure;
             hold on; 
             pcshow(this.target_ic.pointCloud());
-            pcshow(this.centerline1_.Location, '*m', 'MarkerSize', 3);
+            pcshow(this.centerline1_.Location, 'm', 'MarkerSize', 3);
             pcshow(this.centerline0_.Location, '+g', 'MarkerSize', 3);
             hold off;
             view(-210, 15) % tuned for orientstd

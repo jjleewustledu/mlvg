@@ -12,7 +12,6 @@ classdef Ccir1211Subject < mlpipeline.SubjectData2 & handle
     methods
         function this = Ccir1211Subject(varargin)
             this = this@mlpipeline.SubjectData2(varargin{:});
-            setenv('SUBJECTS_DIR', this.subjectsDir);
         end
     end
     

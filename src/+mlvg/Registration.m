@@ -14,9 +14,9 @@ classdef Registration < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copya
         function this = flirt_all_to_t1w(varargin)
             %  Args:
             %      projectPath (isfolder): e.g., fullfile(getenv("SINGULARITY_HOME"), "CCIR_01211"), 
-            %                              needed by mlsiemens.VisionBids
+            %                              needed by mlsiemens.BiographBids
             %      subjectFolder (isfolder): e.g., "sub-108293", 
-            %                                needed by mlsiemens.VisionBids
+            %                                needed by mlsiemens.BiographBids
             %  Returns:
             %      this: mlvg.Registration instance
 
@@ -48,11 +48,11 @@ classdef Registration < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copya
 		  
  		function this = Registration(varargin)
             %  Params:
-            %      bids (mlsiemens.VisionBids): 
+            %      bids (mlsiemens.BiographBids): 
 
             ip = inputParser;
             ip.KeepUnmatched = true;
-            addRequired(ip, "bids", @(x) isa(x, "mlsiemens.VisionBids"))
+            addRequired(ip, "bids", @(x) isa(x, "mlsiemens.BiographBids"))
             addParameter(ip, "reuse", true, @islogical)
             parse(ip, varargin{:})
             ipr = ip.Results;

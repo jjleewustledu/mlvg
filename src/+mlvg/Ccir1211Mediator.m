@@ -1,6 +1,5 @@
 classdef Ccir1211Mediator < handle & mlpipeline.ImagingMediator
-    %% line1
-    %  line2
+    %% CCIR1211MEDIATOR provides a mediator design pattern for project CCIR1211.
     %  
     %  Created 06-Feb-2023 19:33:37 by jjlee in repository /Users/jjlee/MATLAB-Drive/mlvg/src/+mlvg.
     %  Developed on Matlab 9.13.0.2126072 (R2022b) Update 3 for MACI64.  Copyright 2023 John J. Lee.
@@ -10,133 +9,95 @@ classdef Ccir1211Mediator < handle & mlpipeline.ImagingMediator
         metric
     end
 
-    properties (Dependent)
-        projectsDir % homolog of __Freesurfer__ subjectsDir
-        projectsPath
-        projectsFolder
-        projectPath
-        projectFolder % \in projectsFolder        
-        
-        subjectsDir % __Freesurfer__ convention
-        subjectsPath 
-        subjectsFolder 
-        subjectPath
-        subjectFolder % \in subjectsFolder  
-        
-        sessionsDir % __Freesurfer__ convention
-        sessionsPath 
-        sessionsFolder 
-        sessionPath
-        sessionFolder % \in projectFolder        
-        
-        scansDir % __Freesurfer__ convention
-        scansPath 
-        scansFolder 
-        scanPath
-        scanFolder % \in sessionFolder
+    properties (Constant)
+        BIDS_FOLDERS = {'derivatives', 'rawdata', 'sourcedata'};
+    end
 
-        isotope
-        reconstructionMethod
-        tracer
+    properties (Dependent)
+        anatPath
+        derivAnatPath
+        derivativesPath
+        derivPetPath
+        mriPath
+        petPath
+        sourcedataPath
+        sourceAnatPath
+        sourcePetPath
+
+        atlas_ic
+        dlicv_ic
+        flair_ic
+        T1_ic % FreeSurfer
+        T1_on_t1w_ic
+        t1w_ic
+        t2w_ic
+        tof_ic
+        tof_on_t1w_ic
+        wmparc_ic % FreeSurfer
+        wmparc_on_t1w_ic % FreeSurfer
     end
 
     methods % GET/SET
-        function g = get.projectsDir(this)
-            g = this.projectData_.projectsDir;
+        function g = get.anatPath(this)
+            g = this.bids.anatPath;
+        end      
+        function g = get.derivAnatPath(this)
+            g = this.bids.derivAnatPath;
         end
-        function g = get.projectsPath(this)
-            g = this.projectData_.projectsPath;
+        function g = get.derivativesPath(this)
+            g = this.bids.derivativesPath;
         end
-        function g = get.projectsFolder(this)
-            g = this.projectData_.projectsFolder;
-        end
-        function g = get.projectPath(this)
-            g = this.projectData_.projectPath;
-        end
-        function     set.projectPath(this, s)
-            this.projectData_.projectPath = s;
-        end
-        function g = get.projectFolder(this)
-            g = this.projectData_.projectFolder;
+        function g = get.derivPetPath(this)
+            g = this.bids.derivPetPath;
         end        
-        function     set.projectFolder(this, s)
-            this.projectData_.projectFolder = s;
-        end   
-
-        function g = get.subjectsDir(this)
-            g = this.subjectData_.subjectsDir;
+        function g = get.mriPath(this)
+            g = this.bids.mriPath;
         end
-        function g = get.subjectsPath(this)
-            g = this.subjectData_.subjectsPath;
+        function g = get.petPath(this)
+            g = this.bids.petPath;
         end
-        function g = get.subjectsFolder(this)
-            g = this.subjectData_.subjectsFolder;
+        function g = get.sourcedataPath(this)
+            g = this.bids.sourcedataPath;
         end
-        function g = get.subjectPath(this)
-            g = this.subjectData_.subjectPath;
+        function g = get.sourceAnatPath(this)
+            g = this.bids.sourceAnatPath;
         end
-        function     set.subjectPath(this, s)
-            this.subjectData_.subjectPath = s;
+        function g = get.sourcePetPath(this)
+            g = this.bids.sourcePetPath;
         end
-        function g = get.subjectFolder(this)
-            g = this.subjectData_.subjectFolder;
-        end        
-        function     set.subjectFolder(this, s)
-            this.subjectData_.subjectFolder = s;
-        end   
-
-        function g = get.sessionsDir(this)
-            g = this.sessionData_.sessionsDir;
+        
+        function g = get.atlas_ic(this)
+            g = this.bids.atlas_ic;
+        end  
+        function g = get.dlicv_ic(this)
+            g = this.bids.dlicv_ic;
         end
-        function g = get.sessionsPath(this)
-            g = this.sessionData_.sessionsPath;
+        function g = get.flair_ic(this)
+            g = this.bids.flair_ic;
         end
-        function g = get.sessionsFolder(this)
-            g = this.sessionData_.sessionsFolder;
+        function g = get.T1_ic(this) % FreeSurfer
+            g = this.bids.T1_ic;
         end
-        function g = get.sessionPath(this)
-            g = this.sessionData_.sessionPath;
+        function g = get.T1_on_t1w_ic(this)
+            g = this.bids.T1__on_t1w_ic;
         end
-        function     set.sessionPath(this, s)
-            this.sessionData_.sessionPath = s;
+        function g = get.t1w_ic(this)
+            g = this.bids.t1w_ic;
         end
-        function g = get.sessionFolder(this)
-            g = this.sessionData_.sessionFolder;
-        end        
-        function     set.sessionFolder(this, s)
-            this.sessionData_.sessionFolder = s;
+        function g = get.t2w_ic(this)
+            g = this.bids.t2w_ic;
         end
-
-        function g = get.scansDir(this)
-            g = this.scanData_.scansDir;
+        function g = get.tof_ic(this)
+            g = this.bids.tof_ic;
         end
-        function g = get.scansPath(this)
-            g = this.scanData_.scansPath;
+        function g = get.tof_on_t1w_ic(this)
+            g = this.bids.tof_on_t1w_ic;
         end
-        function g = get.scansFolder(this)
-            g = this.scanData_.scansFolder;
+        function g = get.wmparc_ic(this) % FreeSurfer
+            g = this.bids.wmparc_ic;
         end
-        function g = get.scanPath(this)
-            g = this.scanData_.scanPath;
-        end
-        function     set.scanPath(this, s)
-            this.scanData_.scanPath = s;
-        end
-        function g = get.scanFolder(this)
-            g = this.scanData_.scanFolder;
-        end        
-        function     set.scanFolder(this, s)
-            this.scanData_.scanFolder = s;
-        end
-
-        function g = get.isotope(this)
-            g = this.scanData_.isotope;
-        end
-        function g = get.reconstructionMethod(this)
-            g = this.scanData_.reconstructionMethod;
-        end
-        function g = get.tracer(this)
-            g = this.scanData_.tracer;
+        function g = get.wmparc_on_t1w_ic(this)
+            g = this.bids.wmparc_on_t1w_ic;
         end
     end
 
@@ -152,9 +113,6 @@ classdef Ccir1211Mediator < handle & mlpipeline.ImagingMediator
                 subjectFolder=this.subjectFolder);
             this.imagingAtlas_ = this.bids_.atlas_ic;
             this.imagingDlicv_ = this.bids_.dlicv_ic;
-        end
-        function dt = datetime(this, varargin)
-            dt = this.scanData_.datetime(varargin{:});
         end
         function imagingChanged(this, imdata)
             %% subclasses override to affect mlpipeline.ImagingData
@@ -174,15 +132,8 @@ classdef Ccir1211Mediator < handle & mlpipeline.ImagingMediator
                 error('mlpipeline:ValueError', stackstr());
             end
         end
-        function ic = metricOnAtlas(this, varargin)
-            ic = this.scanData_.metricOnAtlas(varargin{:});
-        end
-        function ps = petPointSpread(this, varargin)
-            reg = this.sessionData_.registry;
-            ps = reg.petPointSpread(varargin{:});
-        end
-        function t = taus(this, varargin)
-            t = this.scanData_.taus(varargin{:});
+        function icd = prepare_derivatives(this, ic)
+            icd = this.bids.prepare_derivatives(ic);
         end
         function ic = tracerOnAtlas(this, varargin)
             if endsWith(this.imagingContext.fileprefix, this.registry.atlasTag)

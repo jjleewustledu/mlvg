@@ -42,6 +42,9 @@ classdef Test_Ccir1211 < matlab.unittest.TestCase
         end
         function test_call_ses(this)
         end
+        function test_registry(this)
+            this.verifyNotEmpty(mlvg.Ccir1211Registry.instance())
+        end
 
         %% mlkinetics.OxygenMetabKit
 

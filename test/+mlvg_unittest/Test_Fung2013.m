@@ -12,6 +12,7 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
  	
 	properties
         anatPath
+        bidsObj
         cacheMat % assign after segmentations, centerlines, registration targets are ready
         corners
         ho
@@ -30,6 +31,10 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
         end
         function test_cache(this)
             disp(this.testObj)
+        end
+        function test_t1w(this)
+            disp(this.testObj.anatomy)
+            this.testObj.anatomy.view()
         end
         function test_buildSegmentation(this)
             this.testObj.buildSegmentation('iterations', 100, 'smoothFactor', 0);
@@ -87,18 +92,34 @@ classdef Test_Fung2013 < matlab.unittest.TestCase
             this.sourcePetPath = fullfile(getenv('HOME'), 'Singularity/CCIR_01211/sourcedata/sub-108293/ses-20210421/pet');
             %this.sourcePetPath = fullfile(getenv('HOME'), 'Singularity/subjects/sub-S58163/resampling_restricted');
             cd(this.petPath)         
-            %this.corners = [113 178 140; 87 178 140; 136 149 58; 62 148 59] + 1; % long vglab
-            this.corners = [140 144 109; 60 144 105; 136 149 58; 62 148 59] + 1; % short vglab
             %this.corners = [158 122 85; 96 126 88; 156 116 27; 101 113 28]; % PPG
- 			%this.testObj_ = Fung2013('coords', this.corners, 'plotmore', true, 'iterations', 1000, 'smoothFactor', 0.1, 'BBBuf', [10 10 4]);
- 			this.testObj_ = Fung2013('coords', this.corners, 'iterations', 100);
-            this.t1w = mlfourd.ImagingContext2(fullfile(this.sourceAnatPath, 'sub-108293_20210218081030_T1w.nii.gz'));
-            this.ho = mlfourd.ImagingContext2(fullfile(this.petPath, 'sub-108293_20210421134537_Water_Dynamic_13_on_T1w.nii.gz'));
+            %this.corners = [113 178 140; 87 178 140; 136 149 58; 62 148 59] + 1; % long vglab
+            %this.corners = [140 144 109; 60 144 105; 136 149 58; 62 148 59] + 1; % short vglab; on FreeSurfer T1
+            this.corners = [57 149 114; 150 151 114; 66 144 55; 149 145 55] + 1; % T1w vNAV; [ [RS]; [LS]; [RI]; [LI] ].
+
+            this.t1w = mlfourd.ImagingContext2(fullfile(this.sourceAnatPath, 'sub-108293_ses-20210218081506_T1w_MPR_vNav_4e_RMS_orient-std.nii.gz'));
+            this.ho = mlfourd.ImagingContext2(fullfile(this.petPath, 'sub-108293_ses-20210421152358_trc-ho_proc-dyn_pet_on_T1w.nii.gz'));
+            this.ho_sumt = mlfourd.ImagingContext2(fullfile(this.petPath, 'sub-108293_ses-20210421152358_trc-ho_proc-dyn_pet_on_T1w_avgt.nii.gz'));
             %this.ho = mlfourd.ImagingContext2(fullfile(this.petPath, 'hodt20190523120249_on_T1001.nii.gz'));
-            this.ho_sumt = mlfourd.ImagingContext2(fullfile(this.petPath, 'sub-108293_20210421134537_Water_Static_12_on_T1w.nii.gz'));
             %this.ho_sumt = mlfourd.ImagingContext2(fullfile(this.petPath, 'hodt20190523120249_on_T1001_avgt.nii.gz'));
             %this.cacheMat = fullfile(getenv('HOME'), 'MATLAB-Drive', 'mlvg', 'test', '+mlvg_unittest', 'Test_Fung2013_Vision_20211109.mat');
             %this.cacheMat = fullfile(getenv('HOME'), 'MATLAB-Drive', 'mlvg', 'test', '+mlvg_unittest', 'Test_Fung2013_PPG_20211109.mat');
+
+            this.bidsObj = mlvg.Ccir1211Mediator(this.ho);
+ 			this.testObj_ = Fung2013(coords=this.corners, plotmore=true, iterations=100, bidsObj=this.bidsObj);
+ 			%this.testObj_ = Fung2013('coords', this.corners, 'plotmore', true, 'iterations', 1000, 'smoothFactor', 0.1, 'BBBuf', [10 10 4]);
+
+
+
+
+%             b.destinationPath = this.petPath;
+%             b.anatPath = ;
+%             b.petPath = ;
+%             b.t1w_ic = ;
+%             b.wmparc_ic = ;
+%             b.taus = containers.Map;
+%             b.tracer = 'FDG';
+
  		end
 	end
 

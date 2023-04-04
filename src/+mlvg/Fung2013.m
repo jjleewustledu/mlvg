@@ -20,6 +20,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
         corners_ic
         cornersb_ic
         dilationRadius = 2 % Fung reported best results with radius ~ 2.5, but integers may be faster
+        doRegisterCenterlines = true
         dyn_fileprefix % fileprefix for PET
         dyn_label % label for PET, useful for figures
         it10
@@ -72,13 +73,21 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             g = this.anatomy_mask_;
         end
         function g = get.anatPath(this)
-            g = this.bids_.anatPath;
+            try
+                g = this.bids_.anatPath;
+            catch
+                g = this.bids_.bids.anatPath;
+            end
         end
         function g = get.bids(this)
             g = this.bids_;
         end
         function g = get.destinationPath(this)
-            g = this.bids_.destinationPath;
+            try
+                g = this.bids_.destinationPath;
+            catch
+                g = this.bids_.bids.destinationPath;
+            end
         end
         function g = get.NCenterlineSamples(this)
             rngz = max(this.coords_bb{3}) - min(this.coords_bb{3});
@@ -94,7 +103,11 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             g = size(this.anatomy, 3);
         end
         function g = get.petPath(this)
-            g = this.bids_.petPath;
+            try
+                g = this.bids_.petPath;
+            catch
+                g = this.bids_.bids.petPath;
+            end
         end
         
         %%
@@ -108,8 +121,6 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             %  @param iterations ~ 130.
             %  @param smoothFactor ~ 0.
             
- 			this.bids_ = mlvg.Ccir1211Bids(varargin{:}); 
-
             ip = inputParser;
             addOptional(ip, 'destinationPath', pwd, @isfolder)
             addParameter(ip, 'ploton', true, @islogical)
@@ -120,6 +131,8 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             addParameter(ip, 'BBBuf', [16 16 4], @isnumeric)
             addParameter(ip, 'iterations', 100, @isscalar)
             addParameter(ip, 'smoothFactor', 0, @isscalar)
+            addParameter(ip, 'bidsObj', [], @(x) ~isempty(x))
+            addParameter(ip, 'doRegisterCenterlines', true, @islogical)
             parse(ip, varargin{:})
             ipr = ip.Results;
             this.ploton = ipr.ploton;
@@ -127,8 +140,10 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             this.plotdebug = ipr.plotdebug;
             this.coords = ipr.coords;
             this.BBBuf = ipr.BBBuf;
+            this.doRegisterCenterlines = ipr.doRegisterCenterlines;
             
             % gather requirements
+            this.bids_ = ipr.bidsObj;
             this.hunyadi_ = mlvg.Hunyadi2021();
             this.buildTimings();
             this.buildAnatomy();
@@ -138,17 +153,17 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
         function this = buildAnatomy(this)
             this.anatomy_ = this.bids.t1w_ic;
             this.anatomy_.selectNiftiTool;
-            this.anatomy_mask_ = this.bids.wmparc_ic;
+            this.anatomy_mask_ = this.bids.dlicv_ic;
             this.anatomy_mask_.selectNiftiTool;
         end
         function this = buildTimings(this)
             %% builds taus, times, timesMid.
 
             this.taus = containers.Map;
-            this.taus('CO') = this.bids.registry.consoleTaus('CO');
-            this.taus('OO') = this.bids.registry.consoleTaus('OO');
-            this.taus('HO') = this.bids.registry.consoleTaus('HO');
-            this.taus('FDG') = this.bids.registry.consoleTaus('FDG');
+            this.taus('CO') = this.bids.taus('CO');
+            this.taus('OO') = this.bids.taus('OO');
+            this.taus('HO') = this.bids.taus('HO');
+            this.taus('FDG') = this.bids.taus('FDG');
 
             this.times = containers.Map;
             for key = this.taus.keys
@@ -300,7 +315,7 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             if this.plotmore
                 h = figure;
                 pcshow(pointCloud(this.anatomy, 'thresh', 1000))
-                hold on; pcshow(pc.Location, '*m'); hold off;
+                hold on; pcshow(pc.Location, 'magenta'); hold off;
                 fn_fig = fullfile(this.anatPath, sprintf('%s_%s_centerline.fig', this.anatomy.fileprefix, tag));
                 if ~isfile(fn_fig)
                     saveas(h, fn_fig)
@@ -346,7 +361,8 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
                 return
             end
 
-            this.anatomy_mask_ = mlfourd.ImagingContext2(fullfile(this.mriPath, 'wmparc_on_T1w.nii.gz'));
+            this.anatomy_mask_ = mlfourd.ImagingContext2( ...
+                fullfile(this.mriPath, sprintf('wmparc_on_%s.nii.gz', this.bids.t1w_ic.fileprefix)));
             dyn_avgxyz = dyn_ic.volumeAveraged(logical(this.anatomy_mask_));
             dyn_max = dipmax(dyn_avgxyz);
             img = dyn_avgxyz.nifti.img;
@@ -391,7 +407,9 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
                 % sample input function from dynamic PET             
                 dyn_ic = mlfourd.ImagingContext2(niis{inii});                
                 this.buildRegistrationTargets(dyn_ic)
-                this.registerCenterlines('alg', alg_)
+                if this.doRegisterCenterlines
+                    this.registerCenterlines('alg', alg_)
+                end
                 ic = this.pointCloudsToIC();
                 ic.filepath = dyn_ic.filepath;
                 ic.fileprefix = [dyn_ic.fileprefix '_idifmask'];
@@ -437,12 +455,21 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             decay_corrected = idif.nifti.img;
             assert(isvector(decay_corrected))
 
-            tracer = this.bids.obj2tracer(idif);
+            tracer = this.obj2tracer(idif);
             taus_ = this.taus(tracer);
             N = min(length(decay_corrected), length(taus_));
             radio = mlpet.Radionuclides(tracer);
             decay_uncorrected = decay_corrected(1:N) ./ radio.decayCorrectionFactors('taus', taus_(1:N));
             decay_uncorrected = asrow(decay_uncorrected);
+        end
+        function trc = obj2tracer(this, obj)
+            if isfield(this.bids, 'tracer')
+                trc = upper(this.bids.tracer);
+                return
+            end
+            ic = mlfourd.ImagingContext2(obj);
+            re = regexp(ic.fileprefix, '\S+_trc-(?<tr>\w+)_\S+', 'names');
+            trc = upper(re.tr);
         end
         function [h,h1] = plotRegistered(this, varargin)
             % @param required target, pointCloud.
@@ -463,8 +490,8 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             h = figure;
             pcshow(ipr.target)
             hold on; 
-            pcshow(ipr.centerline.Location, '*g'); 
-            pcshow(ipr.centerlineOnTarget.Location, '*m'); 
+            pcshow(ipr.centerline.Location, 'green'); 
+            pcshow(ipr.centerlineOnTarget.Location, 'magenta'); 
             hold off;
             title(sprintf('centerline (green -> magenta) on target %s %s', upper(ipr.laterality), this.dyn_label))
             saveas(h, fullfile(this.petPath, sprintf('%s_%s_centerline_target.fig', this.dyn_fileprefix, Laterality)))
@@ -619,7 +646,9 @@ classdef Fung2013 < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copyable
             %%  See also web(fullfile(docroot, 'matlab/ref/matlab.mixin.copyable-class.html'))
             
             that = copyElement@matlab.mixin.Copyable(this);
-            that.bids_ = copy(this.bids_);
+            if ishandle(this.bids_)
+                that.bids_ = copy(this.bids_);
+            end
             that.hunyadi_ = copy(this.hunyadi_);
         end
     end

@@ -1,10 +1,239 @@
-classdef Ccir1211Bids < handle & mlsiemens.VisionBids
+classdef Ccir1211Bids < handle & mlsiemens.BiographBids
     %% Key functions:
     %  unpack_cnda() uses dcm2fileprefix(), info2*(), save_json().
     %  
     %  Created 23-Jan-2022 22:39:48 by jjlee in repository /Users/jjlee/MATLAB-Drive/mlvg/src/+mlvg.
     %  Developed on Matlab 9.11.0.1837725 (R2021b) Update 2 for MACI64.  Copyright 2022 John J. Lee.
     
+    properties
+        flair_toglob
+        pet_dyn_toglob
+        pet_static_toglob
+        t1w_toglob
+        t2w_toglob
+        tof_toglob
+    end
+
+    properties (Constant)
+        BIDS_MODALITIES = {'anat' 'fmap' 'func' 'mri' 'pet'}
+        DLICV_TAG = 'DLICV'
+        PROJECT_FOLDER = 'CCIR_01211'
+        SURFER_VERSION = '7.2.0'
+    end
+
+    properties (Dependent)
+        atlas_ic
+        dlicv_ic
+        flair_ic
+        T1_ic % FreeSurfer
+        T1_on_t1w_ic
+        t1w_ic
+        t2w_ic
+        tof_ic
+        tof_on_t1w_ic
+        wmparc_ic % FreeSurfer
+        wmparc_on_t1w_ic
+    end
+
+	methods % GET
+        function g = get.atlas_ic(~)
+            g = mlfourd.ImagingContext2( ...
+                fullfile(getenv('FSLDIR'), 'data', 'standard', 'MNI152_T1_1mm.nii.gz'));
+        end
+        function g = get.dlicv_ic(this)
+            if ~isempty(this.dlicv_ic_)
+                g = copy(this.dlicv_ic_);
+                return
+            end
+            this.dlicv_ic_ = mlfourd.ImagingContext2( ...
+                sprintf('%s_%s.nii.gz', this.t1w_ic.fqfileprefix, this.DLICV_TAG));
+            if ~isfile(this.dlicv_ic_.fqfn)
+                try
+                    r = '';
+                    [~,r] = this.build_dlicv(this.t1w_ic, this.dlicv_ic_);
+                    assert(isfile(this.dlicv_ic_))
+                catch ME
+                    disp(r)
+                    handexcept(ME)
+                end
+            end
+            g = copy(this.dlicv_ic_);
+        end
+        function g = get.flair_ic(this)
+            if ~isempty(this.flair_ic_)
+                g = copy(this.flair_ic_);
+                return
+            end
+            globbed = globT(this.flair_toglob);
+            fn = globbed{end};
+            fn = fullfile(this.anatPath, strcat(mybasename(fn), '_orient-std.nii.gz'));
+            if ~isfile(fn)
+                this.build_orientstd(this.t1w_toglob);
+            end
+            this.flair_ic_ = mlfourd.ImagingContext2(fn);
+            g = copy(this.flair_ic_);
+        end
+        function g = get.T1_ic(this)
+            if ~isempty(this.T1_ic_)
+                g = copy(this.T1_ic_);
+                return
+            end
+            fn = fullfile(this.mriPath, 'T1.mgz');
+            assert(isfile(fn))
+            this.T1_ic_ = mlfourd.ImagingContext2(fn);
+            this.T1_ic_.selectNiftiTool();
+            this.T1_ic_.filepath = this.anatPath;
+            this.T1_ic_.save();
+            g = copy(this.T1_ic_);
+        end
+        function g = get.T1_on_t1w_ic(this)
+            if ~isempty(this.T1_on_t1w_ic_)
+                g = copy(this.T1_on_t1w_ic_);
+                return
+            end
+            fn = strcat(this.T1_ic.fqfp, '_on_T1w.nii.gz');
+            if isfile(fn)
+                this.T1_on_t1w_ic_ = mlfourd.ImagingContext2(fn);
+                g = copy(this.T1_on_t1w_ic_);
+                return
+            end
+            f = mlfsl.Flirt( ...
+                'in', this.T1_ic.fqfn, ...
+                'ref', this.t1w_ic.fqfn, ...
+                'out', fn, ...
+                'noclobber', true);
+            f.flirt();
+            this.T1_on_t1w_ic_ = mlfourd.ImagingContext2(fn);
+            g = copy(this.T1_on_t1w_ic_);
+        end
+        function g = get.t1w_ic(this)
+            if ~isempty(this.t1w_ic_)
+                g = copy(this.t1w_ic_);
+                return
+            end
+            globbed = globT(this.t1w_toglob);
+            globbed = globbed(~contains(globbed, this.DLICV_TAG));
+            fn = globbed{end};
+            fn = fullfile(this.anatPath, strcat(mybasename(fn), '_orient-std.nii.gz'));
+            if ~isfile(fn)
+                this.build_orientstd(this.t1w_toglob);
+            end
+            this.t1w_ic_ = mlfourd.ImagingContext2(fn);
+            g = copy(this.t1w_ic_);
+        end
+        function g = get.t2w_ic(this)
+            if ~isempty(this.t2w_ic_)
+                g = copy(this.t2w_ic_);
+                return
+            end
+            globbed = globT(this.t2w_toglob);
+            fn = globbed{end};
+            fn = fullfile(this.anatPath, strcat(mybasename(fn), '_orient-std.nii.gz'));
+            assert(isfile(fn))
+            this.t2w_ic_ = mlfourd.ImagingContext2(fn);
+            g = copy(this.t2w_ic_);
+        end
+        function g = get.tof_ic(this)
+            if ~isempty(this.tof_ic_)
+                g = copy(this.tof_ic_);
+                return
+            end
+            globbed = globT(this.tof_toglob);
+            fn = globbed{end};
+            fn = fullfile(this.anatPath, strcat(mybasename(fn), '_orient-std.nii.gz'));
+            if ~isfile(fn)
+                this.build_orientstd(this.tof_toglob);
+            end
+            this.tof_ic_ = mlfourd.ImagingContext2(fn);
+            g = copy(this.tof_ic_);
+        end
+        function g = get.tof_on_t1w_ic(this)
+            if ~isempty(this.tof_on_t1w_ic_)
+                g = copy(this.tof_on_t1w_ic_);
+                return
+            end
+            fn = strcat(this.tof_ic.fqfp, '_on_T1w.nii.gz');
+            if isfile(fn)
+                this.tof_on_t1w_ic_ = mlfourd.ImagingContext2(fn);
+                g = copy(this.tof_on_t1w_ic_);
+                return
+            end
+            f = mlfsl.Flirt( ...
+                'in', this.tof_ic.fqfn, ...
+                'ref', this.t1w_ic.fqfn, ...
+                'out', fn, ...
+                'noclobber', true);
+            f.flirt();
+            this.tof_on_t1w_ic_ = mlfourd.ImagingContext2(fn);
+            g = copy(this.tof_on_t1w_ic_);
+        end
+        function g = get.wmparc_ic(this)
+            if ~isempty(this.wmparc_ic_)
+                g = copy(this.wmparc_ic_);
+                return
+            end
+            fn = fullfile(this.mriPath, 'wmparc.mgz');
+            assert(isfile(fn))
+            this.wmparc_ic_ = mlfourd.ImagingContext2(fn);
+            this.wmparc_ic_.selectNiftiTool();
+            this.wmparc_ic_.filepath = this.anatPath;
+            this.wmparc_ic_.save();
+            g = copy(this.wmparc_ic_);
+        end
+        function g = get.wmparc_on_t1w_ic(this)
+            if ~isempty(this.wmparc_on_t1w_ic_)
+                g = copy(this.wmparc_on_t1w_ic_);
+                return
+            end
+            fn = strcat(this.wmparc_ic.fqfp, '_on_T1w.nii.gz');
+            if isfile(fn)
+                this.wmparc_on_t1w_ic_ = mlfourd.ImagingContext2(fn);
+                g = copy(this.wmparc_on_t1w_ic_);
+                return
+            end
+            f = mlfsl.Flirt( ...
+                'in', this.T1_ic.fqfn, ...
+                'ref', this.t1w_ic.fqfn, ...
+                'out', this.T1_on_t1w_ic.fqfn, ...
+                'noclobber', true);
+            f.in = this.wmparc_ic.fqfn;
+            f.out = fn;
+            f.applyXfm();
+            this.wmparc_on_t1w_ic_ = mlfourd.ImagingContext2(fn);
+            g = copy(this.wmparc_on_t1w_ic_);
+        end
+    end
+
+    methods
+        function this = Ccir1211Bids(varargin)
+            %  Args:
+            %      destinationPath (folder): will receive outputs.  Specify project ID & subject ID.
+            %      projectPath (folder): belongs to a CCIR project.  
+            %      subjectFolder (text): is the BIDS-adherent string for subject identity.
+            %      subjectFolder (text): is the BIDS-adherent string for subject identity.
+            
+            this = this@mlsiemens.BiographBids(varargin{:})          
+
+            this.flair_toglob = fullfile(this.sourceAnatPath, 'sub-*_3D_FLAIR_Sag.nii.gz');
+            this.pet_dyn_toglob = fullfile(this.sourcePetPath, 'sub-*_trc-*_proc-dyn*_pet.nii.gz');
+            this.pet_static_toglob = fullfile(this.sourcePetPath, 'sub-*_trc-*_proc-static*_pet.nii.gz');
+            this.t1w_toglob = fullfile(this.sourceAnatPath, 'sub-*_T1w_MPR_vNav_4e_RMS.nii.gz');
+            this.t2w_toglob = fullfile(this.sourceAnatPath, 'sub-*_T2w_SPC_vNava.nii.gz');
+            this.tof_toglob = fullfile(this.sourceAnatPath, 'sub-*_tof_fl3d_tra_p2_multi-slab.nii.gz');
+
+            this.json_ = mlvg.Ccir1211Json();
+        end
+        function j = json(this)
+            j = this.json_;
+        end
+        function r = registry(~)
+            r = mlvg.Ccir1211Registry.instance();
+        end
+        function g = taus(this, trc)
+            g = this.registry.consoleTaus(trc);
+        end
+    end    
+
     methods (Static)
         function bids_to_4dfp(varargin)
             ip = inputParser;
@@ -219,55 +448,10 @@ classdef Ccir1211Bids < handle & mlsiemens.VisionBids
         end        
     end
 
-    properties (Constant)
-        BIDS_MODALITIES = {'anat' 'fmap' 'func' 'mri' 'pet'}
-        PROJECT_FOLDER = 'CCIR_01211'
-        SURFER_VERSION = '7.2.0'
-    end
-
-    properties
-        flair_toglob
-        pet_dyn_toglob
-        pet_static_toglob
-        t1w_toglob
-        t2w_toglob
-        tof_toglob
-    end
-
-    methods
-        function j = json(this)
-            j = this.json_;
-        end
-        function r = registry(this)
-            r = this.registry_;
-        end
-
-        function this = Ccir1211Bids(varargin)
-            %  Args:
-            %      destinationPath (folder): will receive outputs.  Specify project ID & subject ID.
-            %      projectPath (folder): belongs to a CCIR project.  
-            %      subjectFolder (text): is the BIDS-adherent string for subject identity.
-            %      subjectFolder (text): is the BIDS-adherent string for subject identity.
-            
-            this = this@mlsiemens.VisionBids(varargin{:})          
-
-            this.flair_toglob = fullfile(this.sourceAnatPath, 'sub-*_3D_FLAIR_Sag.nii.gz');
-            this.pet_dyn_toglob = fullfile(this.sourcePetPath, 'sub-*_proc-dyn_pet.nii.gz');
-            this.pet_static_toglob = fullfile(this.sourcePetPath, 'sub-*_proc-static_pet.nii.gz');
-            this.t1w_toglob = fullfile(this.sourceAnatPath, 'sub-*_T1w_MPR_vNav_4e_RMS.nii.gz');
-            this.t2w_toglob = fullfile(this.sourceAnatPath, 'sub-*_T2w_SPC_vNava.nii.gz');
-            this.tof_toglob = fullfile(this.sourceAnatPath, 'sub-*_tof_fl3d_tra_p2_multi-slab.nii.gz');
-
-            this.json_ = mlvg.Ccir1211Json();
-            this.registry_ = mlvg.Ccir1211Registry.instance();
-        end
-    end    
-
     %% PROTECTED
 
     properties (Access = protected)
         json_
-        registry_
     end
 
     methods (Access = protected)

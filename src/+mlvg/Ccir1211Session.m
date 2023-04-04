@@ -9,12 +9,6 @@ classdef Ccir1211Session < mlpipeline.SessionData2 & handle
         defects = {}
     end
 
-    properties (Dependent)
-    end
-
-    methods % GET
-    end
-
     methods
         function this = Ccir1211Session(varargin)
             this = this@mlpipeline.SessionData2(varargin{:});
