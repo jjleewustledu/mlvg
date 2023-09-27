@@ -21,6 +21,10 @@ classdef Test_AerobicGlycolysisKit < matlab.unittest.TestCase
             this.verifyEqual(1,1);
             this.assertEqual(1,1);
         end
+        function test_quadraticKit(this)
+        end
+        function test_dispersiveKit(this)
+        end
         function test_construct(this)
            these = mlvg.QuadraticAerobicGlycolysisKit.construct('cmrglc-posthoc');
            disp(these)

@@ -42,7 +42,7 @@ classdef Reregistration < handle
 
         function g = get.ic_centerline1(this)
             ic_centerline1__ = copy(this.target_ic);
-            ic_centerline1__.relocateDerivatives();
+            ic_centerline1__.relocateToDerivativesFolder();
             ic_centerline1__.setPointCloud(this.centerline1_);            
             ic_centerline1__.fileprefix = strcat(this.target_ic.fileprefix, '_', clientname(true, 2));
             g = ic_centerline1__;
@@ -72,7 +72,7 @@ classdef Reregistration < handle
             parse(ip, varargin{:})
             ipr = ip.Results;
             this.target_ic = mlfourd.ImagingContext2(ipr.target_ic);
-            this.target_ic.relocateDerivatives();
+            this.target_ic.relocateToDerivativesFolder();
             this.target_bb = ipr.bounding_box;
 
             this.mmppix = this.target_ic.nifti.mmppix;

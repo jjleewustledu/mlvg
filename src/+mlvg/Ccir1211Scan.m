@@ -1,4 +1,4 @@
-classdef Ccir1211Scan < mlpipeline.ScanData2 & handle
+classdef Ccir1211Scan < handle & mlpipeline.ScanData2
     %% line1
     %  line2
     %  
@@ -19,6 +19,10 @@ classdef Ccir1211Scan < mlpipeline.ScanData2 & handle
             %% entered into console protocol
             %  see also t0_and_dt()
                       
+            if ~istext(tracer)
+                t = 0;
+                return
+            end
             switch lower(tracer)
                 case 'fdg'
                     t = [5*ones(1,24) 20*ones(1,9) 60*ones(1,10) 300*ones(1,9)];
@@ -27,7 +31,7 @@ classdef Ccir1211Scan < mlpipeline.ScanData2 & handle
                 case {'oc' 'co'}
                     t = [15 60*ones(1,5)];
                 otherwise
-                    error('mlvg:IndexError', 'SessionData.consoleTaus.tracer->%s', tracer);
+                    t = 0; % for non-PET imaging such as T1w
             end
         end 
     end

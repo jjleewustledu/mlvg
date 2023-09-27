@@ -258,7 +258,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
             ogi_z.fileprefix = this.metricOnAtlas('ogi-zscore').fileprefix;  
             ogi_z.save()     
 
-            % check cbfcbv_ = this.metricOnAtlas('cbv', tags='voxels');
+            % check cbf_ = this.metricOnAtlas('cbf', tags='voxels');
             cbf_ = this.metricOnAtlas('cbf', tags='voxels');
             cbf_ = cbf_.blurred(3.45);
             cbf_.save()
@@ -313,104 +313,6 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
                 idx = idx + 1;
             end            
         end 
-        function ic = constructPhysiologyDateOnly(varargin)
-            %% e.g., constructPhysiologyDateOnly('cbv', 'immediator', obj) % pwd includes sub-108293            
-            %  e.g., constructPhysiologyDateOnly('cbv', 'immediator', obj, ...
-            %                                    'workpath', '/path/to/sub-108293/resampling_restricted')
-            %  e.g., constructPhysiologyDateOnly('cbv', 'immediator', obj, ...
-            %                                    'workpath', '/path/to/sub-108293/resampling_restricted', ...
-            %                                    'filepatt', 'ocdt2021*_111_voxels.4dfp.hdr')
-            
-            import mlvg.QuadraticAerobicGlycolysisKit
-            
-            reg = mlvg.Ccir1211Registry.instance();
-            ip = inputParser;
-            addRequired(ip, 'physiology', @istext)
-            addParameter(ip, 'immediator', [], @(x) isa(x, 'mlpipeline.ImagingData') || isa(x, 'mlpipeline.ImagingMediator'))
-            addParameter(ip, 'workpath', pwd, @isfolder)
-            addParameter(ip, 'subjectFolder', '', @istext) 
-            addParameter(ip, 'filepatt', '', @istext)
-            addParameter(ip, 'atlTag', reg.atlasTag, @istext)
-            addParameter(ip, 'blurTag', reg.blurTag, @istext)
-            addParameter(ip, 'region', 'voxels', @istext)
-            parse(ip, varargin{:})
-            ipr = ip.Results;
-            if isempty(ipr.subjectFolder)
-                ipr.subjectFolder = reg.workpath2subject(ipr.workpath);
-            end
-            if isempty(ipr.filepatt)
-                ipr.filepatt = sprintf('%sdt*%s%s_%s.4dfp.hdr', ipr.physiology, ipr.atlTag, ipr.blurTag, ipr.region);
-                %ipr.filepatt = sprintf('%s_ses-*_trac-*_proc-%s_pet%s_%s.4dfp.hdr', ...
-                %    ipr.subjectFolder, ipr.physiology, ipr.atlTag, ipr.region);
-            end
-            
-            pwd0 = pushd(ipr.workpath);
-            g = globT(ipr.filepatt);
-            if isempty(g); return; end
-            
-            %% segregate by dates
-            
-            m = containers.Map;            
-            for ig = 1:length(g)
-                if contains(g{ig}, ipr.immediator.defects)
-                    continue
-                end
-                dstr = AbstractAerobicGlycolysisKit.physiologyObjToDatetimeStr(g{ig}, 'dateonly', true);
-                if ~lstrfind(m.keys, dstr)
-                    m(dstr) = g(ig); % cell
-                else
-                    m(dstr) = [m(dstr) g{ig}];
-                end
-            end 
-            
-            %% average scans by dates
-            
-            for k = asrow(m.keys)
-                fns = m(k{1});
-                ic = mlfourd.ImagingContext2(fns{1});
-                ic = ic.zeros();
-                icfp = strrep(ic.fileprefix, ...
-                    QuadraticAerobicGlycolysisKit.physiologyObjToDatetimeStr(fns{1}), ...
-                    QuadraticAerobicGlycolysisKit.physiologyObjToDatetimeStr(fns{1}, 'dateonly', true));
-                if isfile([icfp '.4dfp.hdr'])
-                    continue
-                end
-                ic_count = 0;
-                for fn = fns
-                    incr = mlfourd.ImagingContext2(fn{1});
-                    if dipsum(incr) > 0
-                        ic = ic + incr;
-                        ic_count = ic_count + 1;
-                    end
-                end
-                ic = ic / ic_count;
-                ic.fileprefix = icfp;
-                ic.save()
-            end
-            
-            %%
-            
-            popd(pwd0);
-        end
-        function dt = physiologyObjToDatetime(obj)
-            ic = mlfourd.ImagingContext2(obj);            
-            ss = split(ic.fileprefix, '_');
-            re = regexp(ss{2}, 'ses-(?<datetime>\d{14})\w*', 'names');
-            dt = datetime(re.datetime, 'InputFormat', 'yyyyMMddHHmmss');
-        end
-        function dtstr = physiologyObjToDatetimeStr(varargin)
-            import mlvg.QuadraticAerobicGlycolysisKit 
-            ip = inputParser;
-            addRequired(ip, 'obj', @(x) ~isempty(x))
-            addParameter(ip, 'dateonly', false, @islogical)
-            parse(ip, varargin{:})
-            ipr = ip.Results;  
-            if ipr.dateonly
-                dtstr = [datestr(QuadraticAerobicGlycolysisKit.physiologyObjToDatetime(ipr.obj), 'yyyymmdd') '000000'];
-            else
-                dtstr = datestr(QuadraticAerobicGlycolysisKit.physiologyObjToDatetime(ipr.obj), 'yyyymmddHHMMSS') ;
-            end
-        end
     end
     
     properties (Dependent)
@@ -456,12 +358,6 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
     end
 
     methods
-        function obj = applyBrainMask(this, obj)
-            msk = this.dlicv();
-            fp = obj.fileprefix;
-            obj = obj .* msk;
-            obj.fileprefix = strrep(fp, '_pet', '-dlicv_pet');            
-        end
         function fs_ = buildFsByVoxels(this, varargin)
             %% BUILDFSBYVOXELS
             %  @return fs in R^4 as mlfourd.ImagingContext2, without saving to filesystems.  
@@ -665,55 +561,7 @@ classdef QuadraticAerobicGlycolysisKit < handle & mlpet.AbstractAerobicGlycolysi
 
             vs_ = mlfourd.ImagingContext2(vs_);
             popd(pwd0);
-        end
-        function obj = metricOnAtlas(this, metric, varargin)
-            %% METRICONATLAS appends fileprefixes with information from this.dataAugmentation
-            %  @param required metric is char.
-            %  @param datetime is datetime or char, .e.g., '20200101000000' | ''.
-            %  @param dateonly is logical.
-            %  @param tags is char, e.g., 'b43_wmparc1', default ''.
-            
-            ip = inputParser;
-            ip.KeepUnmatched = true;
-            addRequired(ip, 'metric', @ischar)
-            addParameter(ip, 'datetime', this.immediator.datetime, @(x) isdatetime(x) || ischar(x))
-            addParameter(ip, 'dateonly', false, @islogical)
-            addParameter(ip, 'tags', '', @ischar)
-            parse(ip, metric, varargin{:})
-            ipr = ip.Results;
-
-            try
-                g = glob(fullfile(this.immediator.scanPath, ...
-                    sprintf('*_%s_*%s*.nii.gz', metric, ipr.tags)));
-                if ~isempty(g)
-                    obj = mlfourd.ImagingContext2(g{1});
-                    return
-                end
-            catch ME
-                handexcept(ME)
-            end
-            
-            if ~isempty(ipr.tags)
-                ipr.tags = strip(ipr.tags, "_");
-            end   
-            if ischar(ipr.datetime)
-                adatestr = ipr.datetime;
-            end
-            if isdatetime(ipr.datetime)
-                if ipr.dateonly
-                    adatestr = ['ses-' datestr(ipr.datetime, 'yyyymmdd') '000000'];
-                else
-                    adatestr = ['ses-' datestr(ipr.datetime, 'yyyymmddHHMMSS')];
-                end
-            end
-            
-            s = this.bids.filename2struct(this.immediator.imagingContext.fqfn);
-            s.ses = adatestr;
-            s.modal = ipr.metric;
-            s.tag = ipr.tags;
-            fqfn = this.bids.struct2filename(s);
-            obj = mlfourd.ImagingContext2(fqfn);
-        end	  
+        end          
     end
 
     %% PROTECTED

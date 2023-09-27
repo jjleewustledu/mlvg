@@ -1,4 +1,4 @@
-classdef Ccir1211Session < mlpipeline.SessionData2 & handle
+classdef Ccir1211Session < handle & mlpipeline.SessionData2
     %% line1
     %  line2
     %  
@@ -20,7 +20,7 @@ classdef Ccir1211Session < mlpipeline.SessionData2 & handle
 
     methods (Access = ?mlpipeline.SessionData2)
         function buildRadmeasurements(this)
-            this.radMeasurements_ = mlpet.CCIRRadMeasurements2.createFromSession( ...
+            this.radMeasurements_ = mlpet.CCIRRadMeasurements.createFromSession( ...
                 this.mediator_);
         end
     end

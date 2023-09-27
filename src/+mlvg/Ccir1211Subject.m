@@ -1,4 +1,4 @@
-classdef Ccir1211Subject < mlpipeline.SubjectData2 & handle
+classdef Ccir1211Subject < handle & mlpipeline.SubjectData2
     %% line1
     %  line2
     %  
