@@ -38,4 +38,3 @@ classdef Ccir1211Scan < handle & mlpipeline.ScanData2
     
     %  Created with mlsystem.Newcl, inspired by Frank Gonzalez-Morphy's newfcn.
 end
- 

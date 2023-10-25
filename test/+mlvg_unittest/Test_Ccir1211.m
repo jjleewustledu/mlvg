@@ -32,6 +32,15 @@ classdef Test_Ccir1211 < matlab.unittest.TestCase
                 'sub-108293_ses-20210421171325_trc-fdg_proc-static-phantom_pet')
             this.verifyEqual(med.timeOffsetConsole, seconds(31))
         end
+        function test_derivatives(this)
+            fqfn = fullfile(getenv("SINGULARITY_HOME"), ...
+                "CCIR_01211", "sourcedata", "sub-108293", 'ses-20210421152358', "pet", ...
+                "sub-108293_ses-20210421152358_trc-ho_proc-for-testing.nii.gz");
+            med = mlvg.Ccir1211Mediator(fqfn);
+            icd = med.prepare_derivatives();
+            this.verifyTrue(isfile(icd.fqfn));
+            deleteExisting(icd.fqfn);
+        end
         function test_datetime(this)
             fqfn = fullfile(getenv('SINGULARITY_HOME'), 'CCIR_01211/derivatives/sub-108293/ses-20210421/pet', ...
                 'sub-108293_ses-20210421171325_trc-fdg_proc-static-phantom_pet.nii.gz');

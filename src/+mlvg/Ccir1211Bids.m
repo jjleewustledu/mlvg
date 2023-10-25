@@ -5,15 +5,6 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
     %  Created 23-Jan-2022 22:39:48 by jjlee in repository /Users/jjlee/MATLAB-Drive/mlvg/src/+mlvg.
     %  Developed on Matlab 9.11.0.1837725 (R2021b) Update 2 for MACI64.  Copyright 2022 John J. Lee.
     
-    properties
-        flair_toglob
-        pet_dyn_toglob
-        pet_static_toglob
-        t1w_toglob
-        t2w_toglob
-        tof_toglob
-    end
-
     properties (Constant)
         BIDS_MODALITIES = {'anat' 'fmap' 'func' 'mri' 'pet'}
         DLICV_TAG = 'DLICV'
@@ -28,16 +19,8 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
             %      projectPath (folder): belongs to a CCIR project.  
             %      subjectFolder (text): is the BIDS-adherent string for subject identity.
             %      subjectFolder (text): is the BIDS-adherent string for subject identity.
-            
-            this = this@mlsiemens.BiographBids(varargin{:})          
 
-            this.flair_toglob = fullfile(this.sourceAnatPath, 'sub-*_3D_FLAIR_Sag.nii.gz');
-            this.pet_dyn_toglob = fullfile(this.sourcePetPath, 'sub-*_trc-*_proc-dyn*_pet.nii.gz');
-            this.pet_static_toglob = fullfile(this.sourcePetPath, 'sub-*_trc-*_proc-static*_pet.nii.gz');
-            this.t1w_toglob = fullfile(this.sourceAnatPath, 'sub-*_T1w_MPR_vNav_4e_RMS.nii.gz');
-            this.t2w_toglob = fullfile(this.sourceAnatPath, 'sub-*_T2w_SPC_vNava.nii.gz');
-            this.tof_toglob = fullfile(this.sourceAnatPath, 'sub-*_tof_fl3d_tra_p2_multi-slab.nii.gz');
-
+            this = this@mlsiemens.BiographBids(varargin{:})
             this.json_ = mlvg.Ccir1211Json();
         end
         function r = registry(~)

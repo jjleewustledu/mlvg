@@ -1,4 +1,4 @@
-classdef Test_AerobicGlycolysisKit < matlab.unittest.TestCase
+nsclassdef Test_AerobicGlycolysisKit < matlab.unittest.TestCase
     %% Tests all quantitative inferences on sub-108293/ses-20210421
     %  
     %  Created 31-Jan-2023 22:38:05 by jjlee in repository /Users/jjlee/MATLAB-Drive/mlvg/test/+mlvg_unittest.

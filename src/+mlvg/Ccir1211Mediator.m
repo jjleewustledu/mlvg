@@ -50,7 +50,7 @@ classdef Ccir1211Mediator < handle & mlpipeline.ImagingMediator
             this.buildImaging(varargin{:});
             
             this.bids_ = mlvg.Ccir1211Bids( ...
-                destinationPath=this.scanPath, ...
+                originationPath=this.scanPath, ...
                 projectPath=this.projectPath, ...
                 subjectFolder=this.subjectFolder);
             this.imagingContext_ = this.ensureTimingData(this.imagingContext_);
@@ -62,6 +62,11 @@ classdef Ccir1211Mediator < handle & mlpipeline.ImagingMediator
             end          
         end
         function icd = prepare_derivatives(this, ic)
+            arguments
+                this mlvg.Ccir1211Mediator
+                ic {mustBeNonempty} = this.imagingContext_
+            end
+
             icd = this.bids.prepare_derivatives(ic);
         end
     end
@@ -78,10 +83,10 @@ classdef Ccir1211Mediator < handle & mlpipeline.ImagingMediator
         function buildImaging(this, imcontext)
             arguments
                 this mlvg.Ccir1211Mediator
-                imcontext = this.imagingContext
+                imcontext = this.imagingContext_
             end
             if ~isempty(imcontext)
-                this.imagingContext_ = mlfourd.ImagingContext2(imcontext);
+                this.imagingContext_ = imcontext;
             end
 
             this.scanData_ = mlvg.Ccir1211Scan(this, dataPath=this.imagingContext_.filepath);
