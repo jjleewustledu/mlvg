@@ -21,7 +21,11 @@ classdef Ccir1211Mediator < handle & mlpipeline.ImagingMediator
             %% Args must be understandable by mlfourd.ImagingContext2.
 
             this = this@mlpipeline.ImagingMediator(varargin{:});
-            this.initialize();
+            try
+                this.initialize();
+            catch ME
+                handwarning(ME)
+            end
         end
         function [this,T] = findProximal(this, index, patt)
             arguments
