@@ -57,7 +57,7 @@ classdef Ccir1211Mediator < handle & mlpipeline.ImagingMediator
                 originationPath=this.scanPath, ...
                 projectPath=this.projectPath, ...
                 subjectFolder=this.subjectFolder);
-            this.imagingContext_ = this.ensureTimingData(this.imagingContext_);
+            this.imagingContext_ = this.ensureFiniteImagingContext(this.imagingContext_);
             this.imagingAtlas_ = this.bids_.atlas_ic;
             try
                 this.imagingDlicv_ = this.bids_.dlicv_ic;
