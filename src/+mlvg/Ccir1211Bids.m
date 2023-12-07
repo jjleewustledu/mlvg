@@ -21,7 +21,11 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
             %      subjectFolder (text): is the BIDS-adherent string for subject identity.
 
             this = this@mlsiemens.BiographBids(varargin{:})
-            this.json_ = mlvg.Ccir1211Json();
+            try
+                this.json_ = mlvg.Ccir1211Json();
+            catch ME
+                handwarning(ME)
+            end
         end
         function r = registry(~)
             r = mlvg.Ccir1211Registry.instance();
