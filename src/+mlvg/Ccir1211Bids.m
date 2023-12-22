@@ -24,7 +24,7 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
             try
                 this.json_ = mlvg.Ccir1211Json();
             catch ME
-                handwarning(ME)
+                fprintf("%s: ignoring mlvg.Ccir1211Json\n", stackstr());
             end
         end
         function r = registry(~)
