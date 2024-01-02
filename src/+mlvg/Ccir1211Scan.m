@@ -29,7 +29,7 @@ classdef Ccir1211Scan < handle & mlpipeline.ScanData2
                 case {'oo' 'ho'}
                     t = [3*ones(1,23) 5*ones(1,6) 10*ones(1,8) 30*ones(1,6)];
                 case {'oc' 'co'}
-                    t = [15 60*ones(1,5)];
+                    t = [15 60*ones(1,6)];
                 otherwise
                     t = 0; % for non-PET imaging such as T1w
             end
