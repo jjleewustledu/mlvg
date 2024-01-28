@@ -31,6 +31,25 @@ classdef Lee2024 < handle & mlsystem.IHandle
 
             popd(pwd0);
         end
+        function dilate_centerlines(this)
+            T = this.table_centerlines();
+            for cidx = 1:size(T, 1)
+                ic = mlfourd.ImagingContext2(T.bids_fqfn{cidx});
+                for m = 2:10
+                    this.dilate_centerline(ic, m);
+                end
+            end
+        end
+        function ic = dilate_centerline(~, ic, m)
+            assert(m > 1)
+
+            p = floor(mean(m, m)/2);
+            se = strel('cuboid', [m,m,p]);
+            fp = ic.fileprefix;
+            ic = ic.imdilate(se);
+            ic.fileprefix = sprintf("%s_dilate-m%i", fp, m);
+            ic.save();
+        end
         function cl = shift_centerline(this, row, opts)
             arguments
                 this mlvg.Lee2024
@@ -94,6 +113,9 @@ classdef Lee2024 < handle & mlsystem.IHandle
 
             popd(pwd0);
         end
+        function build_all_twilite(this)
+            
+        end
         function call_ifk(this, row, opts)
             arguments
                 this mlvg.Lee2024
@@ -135,155 +157,65 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 handwarning(ME)
             end
         end
-        function plot_bigraph_nest(this, trc, ti)
-            Ttwil = this.table_twilite_nest();
-            Tidif = this.table_idif_nest();
-            Utwil = Ttwil(Ttwil.tracer == trc, :);
-            Uidif = Tidif(Tidif.tracer == trc, :);
-
-            figure; hold on
-            for r = 1:size(Uidif, 1)
-                plot(Uidif.timesMid{r}, Uidif.img{r}, LineWidth=1.5); end; hold off
-            ylabel("activity (kBq/mL)")
-            fontsize(scale = 1.5)
-            title(ti)
-
-            figure; hold on
-            for r = 1:size(Utwil, 1)
-                plot(Utwil.timesMid{r}, Utwil.img{r}, LineWidth=1.5); end; hold off
-            set(gca, 'YDir', 'reverse')
-            xlabel("time (s)")
-            fontsize(scale = 1.5)
-        end
         function plot_bigraph(this, trc, ti)
             Ttwil = this.table_twilite_nii();
             Tidif = this.table_idif_nii();
+
             Utwil = Ttwil(Ttwil.tracer == trc, :);
             Uidif = Tidif(Tidif.tracer == trc, :);
 
             figure; hold on
             for r = 1:size(Uidif, 1)
-                plot(Uidif.timesMid{r}, Uidif.img{r}, LineWidth=1.5); end; hold off
+                plot(Uidif.timesMid{r}, Uidif.img{r}, LineWidth=2); end; hold off
             ylabel("activity (kBq/mL)")
             fontsize(scale = 1.5)
             title(ti)
+            xlim(this.xlim(trc));
 
             figure; hold on
             for r = 1:size(Utwil, 1)
-                plot(Utwil.timesMid{r}, Utwil.img{r}, LineWidth=1.5); end; hold off
+                plot(Utwil.timesMid{r}, Utwil.img{r}, LineWidth=2); end; hold off
             set(gca, 'YDir', 'reverse')
             xlabel("time (s)")
             fontsize(scale = 1.5)
+            xlim(this.xlim(trc));
         end
-        function T = strrep_bids_fqfn(this, opts)
-            %% updates this.table_maframes_nii_, replacing arbitrary strings with new strings
+        function plot_bigraph_nest(this, trc, ti)
+            Ttwil = this.table_twilite_nest();
+            Tidif = this.table_idif_nest();
 
-            arguments
-                this
-                opts.s1 {mustBeTextScalar} = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity")
-                opts.s2 {mustBeTextScalar} = fullfile(getenv("SINGULARITY_HOME"))
-            end
-            
-            T = this.table_maframes_nii;
-            T.bids_fqfn = strrep(T.bids_fqfn, opts.s1, opts.s2);
-            this.table_maframes_nii_ = T;
+            Utwil = Ttwil(Ttwil.tracer == trc, :);
+            Uidif = Tidif(Tidif.tracer == trc, :);
+
+            figure; hold on
+            for r = 1:size(Uidif, 1)
+                plot(Uidif.timesMid{r}, Uidif.img{r}, LineWidth=2); end; hold off
+            ylabel("activity (kBq/mL)")
+            fontsize(scale = 1.5)
+            title(ti)
+            xlim(this.xlim(trc));
+
+            figure; hold on
+            for r = 1:size(Utwil, 1)
+                plot(Utwil.timesMid{r}, Utwil.img{r}, LineWidth=2); end; hold off
+            set(gca, 'YDir', 'reverse')
+            xlabel("time (s)")
+            fontsize(scale = 1.5)
+            xlim(this.xlim(trc));
         end
-        function T = table_idif_nest(this, matched)
+        function T = table_centerlines(this)
             arguments
                 this mlvg.Lee2024
-                matched logical = true
             end
 
-            if ~isempty(this.table_idif_nest_)
-                T = this.table_idif_nest_;
+            if ~isempty(this.table_centerlines_)
+                T = this.table_centerlines_;
                 return
             end
 
             T = this.table_maframes_nii;
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", "MipIdif_idif_dynesty-Boxcar-ideal.csv");
-            T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
-
-            % include only files on the filesystem
-            if matched
-                [~,found] = this.table_twilite_nii(true);
-                T = T(found, :);
-                T = this.add_csv(T);
-                this.table_idif_nest_ = T;
-            end
-        end
-        function T = table_idif_nii(this, matched)
-            arguments
-                this mlvg.Lee2024
-                matched logical = true
-            end
-
-            if ~isempty(this.table_idif_nii_)
-                T = this.table_idif_nii_;
-                return
-            end
-
-            T = this.table_maframes_nii;
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames", "MipIdif_idif");
-            T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
-
-            % include only files on the filesystem
-            if matched
-                [~,found] = this.table_twilite_nii(true);
-                T = T(found, :);
-                T = this.add_imaging(T);
-                this.table_idif_nii_ = T;
-            end
-        end
-        function T = table_twilite_nest(this, matched)
-            arguments
-                this mlvg.Lee2024
-                matched logical = true
-            end
-
-            if ~isempty(this.table_twilite_nest_)
-                T = this.table_twilite_nest_;
-                return
-            end
-
-            T = this.table_maframes_nii;
-            T = this.truncate_ses(T);
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", "TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal.csv");
-            T.bids_fqfn = strrep(T.bids_fqfn, "derivatives", "sourcedata");
-
-            % include only files on the filesystem
-            if matched
-                [~,found] = this.table_twilite_nii(true);
-                T = T(found, :);
-                T = this.add_csv(T);
-                this.table_twilite_nest_ = T;
-            end
-        end
-        function [T,found] = table_twilite_nii(this, matched)
-            arguments
-                this mlvg.Lee2024
-                matched logical = true
-            end
-
-            if ~isempty(this.table_twilite_nii_) && ~isempty(this.found_)
-                T = this.table_twilite_nii_;
-                found = this.found_;
-                return
-            end
-            
-            T = this.table_maframes_nii;
-            T = this.truncate_ses(T);
-            T.bids_fqfn = strrep(T.bids_fqfn, "derivatives", "sourcedata");
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames", "TwiliteKit-do-make-input-func-nomodel_inputfunc");
-            found = [];
-
-            % include only files on the filesystem
-            if matched
-                this.found_ = isfile(T.bids_fqfn);
-                found = this.found_;
-                T = T(found, :);
-                T = this.add_imaging(T);                
-                this.table_twilite_nii_ = T;
-            end
+            T.bids_fqfn = fullfile( ...
+                myfileparts(strrep(T.bids_fqfn, "sourcedata", "derivatives")), "centerline_on_pet");
         end
         function T = table_maframes_nii(this)
             if ~isempty(this.table_maframes_nii_)
@@ -291,6 +223,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 return
             end
 
+            console_clock(1:5) = seconds(31);
             bids_fqfn(1) = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", ...
                 "CCIR_01211", "sourcedata", "sub-108293", "ses-20210421144815", "pet", ...
                 "sub-108293_ses-20210421144815_trc-co_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
@@ -307,6 +240,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                "CCIR_01211", "sourcedata", "sub-108293", "ses-20210421155709", "pet", ...
                "sub-108293_ses-20210421155709_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");           
 
+            console_clock(6:10) = seconds(17);
             bids_fqfn(6) = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", ...
                 "CCIR_01211", "sourcedata", "sub-108237", "ses-20221031100910", "pet", ...
                 "sub-108237_ses-20221031100910_trc-co_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
@@ -322,7 +256,8 @@ classdef Lee2024 < handle & mlsystem.IHandle
             bids_fqfn(10) = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", ...
                 "CCIR_01211", "sourcedata", "sub-108237", "ses-20221031113804", "pet", ...
                 "sub-108237_ses-20221031113804_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
-             
+            
+            console_clock(11:15) = seconds(26);
             bids_fqfn(11) = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", ...
                 "CCIR_01211", "sourcedata", "sub-108254", "ses-20221116095143", "pet", ...
                 "sub-108254_ses-20221116095143_trc-co_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
@@ -339,6 +274,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 "CCIR_01211", "sourcedata", "sub-108254", "ses-20221116115244", "pet", ...
                 "sub-108254_ses-20221116115244_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
             
+            console_clock(16:20) = seconds(43);
             bids_fqfn(16) = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", ...
                 "CCIR_01211", "sourcedata", "sub-108250", "ses-20221207093856", "pet", ...
                 "sub-108250_ses-20221207093856_trc-co_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
@@ -354,7 +290,8 @@ classdef Lee2024 < handle & mlsystem.IHandle
             bids_fqfn(20) = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", ...
                 "CCIR_01211", "sourcedata", "sub-108250", "ses-20221207104909", "pet", ...
                 "sub-108250_ses-20221207104909_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
-             
+            
+            console_clock(21:25) = seconds(25);
             bids_fqfn(21) = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", ...
                 "CCIR_01211", "sourcedata", "sub-108284", "ses-20230220093702", "pet", ...
                 "sub-108284_ses-20230220093702_trc-co_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
@@ -371,6 +308,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 "CCIR_01211", "sourcedata", "sub-108284", "ses-20230220112328", "pet", ...
                 "sub-108284_ses-20230220112328_trc-ho_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
 
+            console_clock(26:30) = seconds(32);
             bids_fqfn(26) = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", ...
                 "CCIR_01211", "sourcedata", "sub-108306", "ses-20230227103048", "pet", ...
                 "sub-108306_ses-20230227103048_trc-co_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz");
@@ -399,7 +337,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
             ses = ascol(ses);       
             tracer = ascol(tracer);
 
-            this.table_maframes_nii_ = table(sub, ses, bids_fqfn, tracer);
+            this.table_maframes_nii_ = table(sub, ses, bids_fqfn, tracer, console_clock);
             T = this.table_maframes_nii_;
 
             %% local filesystems
@@ -408,39 +346,124 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 this.strrep_bids_fqfn();
             end
         end
+        function T = table_idif_nest(this, matched)
+            arguments
+                this mlvg.Lee2024
+                matched logical = true
+            end
+
+            if ~isempty(this.table_idif_nest_)
+                T = this.table_idif_nest_;
+                return
+            end
+
+            T = this.table_maframes_nii;
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", "MipIdif_idif_dynesty-Boxcar-ideal.csv");
+            T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
+
+            % include only files on the filesystem
+            if matched
+                [T0,found] = this.table_idif_nii(true);
+                T = T(found, :);
+                T = this.add_csv(T);
+
+                T = addvars(T, T0.tidx, NewVariableNames={'tidx'});
+                T = this.apply_adjusted_timesMid_img(T, "idif");
+                this.table_idif_nest_ = T;
+            end
+        end
+        function [T,found] = table_idif_nii(this, matched)
+            arguments
+                this mlvg.Lee2024
+                matched logical = true
+            end
+
+            if ~isempty(this.table_idif_nii_) && ~isempty(this.found_)
+                T = this.table_idif_nii_;
+                found = this.found_;                
+                return
+            end
+
+            T = this.table_maframes_nii;
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames", "MipIdif_idif");
+            T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
+
+            % include only files on the filesystem
+            if matched
+                [~,found] = this.table_twilite_nii(true);
+                T = T(found, :);
+                T = this.add_imaging(T);
+
+                T = this.find_adjusted_timesMid_img(T, "idif");
+                T = this.apply_adjusted_timesMid_img(T, "idif");
+                this.table_idif_nii_ = T;
+            end
+
+        end
+        function T = table_twilite_nest(this, matched)
+            arguments
+                this mlvg.Lee2024
+                matched logical = true
+            end
+
+            if ~isempty(this.table_twilite_nest_)
+                T = this.table_twilite_nest_;
+                return
+            end
+
+            T = this.table_maframes_nii;
+            T = this.truncate_ses(T);
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", "TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal.csv");
+            T.bids_fqfn = strrep(T.bids_fqfn, "derivatives", "sourcedata");
+
+            % include only files on the filesystem
+            if matched
+                [T0,found] = this.table_twilite_nii(true);
+                T = T(found, :);
+                T = this.add_csv(T);
+                
+                T = addvars(T, T0.tidx, NewVariableNames={'tidx'});
+                T = this.apply_adjusted_timesMid_img(T, "twil");
+                this.table_twilite_nest_ = T;
+            end
+        end
+        function [T,found] = table_twilite_nii(this, matched)
+            arguments
+                this mlvg.Lee2024
+                matched logical = true
+            end
+
+            if ~isempty(this.table_twilite_nii_) && ~isempty(this.found_)
+                T = this.table_twilite_nii_;
+                found = this.found_;
+                return
+            end
+            
+            T = this.table_maframes_nii;
+            T = this.truncate_ses(T);
+            T.bids_fqfn = strrep(T.bids_fqfn, "derivatives", "sourcedata");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames", "TwiliteKit-do-make-input-func-nomodel_inputfunc");
+            found = [];
+
+            % include only files on the filesystem
+            if matched
+                this.found_ = isfile(T.bids_fqfn);
+                found = this.found_;
+                T = T(found, :);
+                T = this.add_imaging(T);     
+
+                T = this.find_adjusted_timesMid_img(T, "twil");
+                T = this.apply_adjusted_timesMid_img(T, "twil");
+                this.table_twilite_nii_ = T;
+            end
+        end
 
         function this = Lee2024(varargin)
         end
     end
 
     methods (Static)
-        function T = add_csv(T)
-            timesMid = cell(size(T, 1), 1);
-            img = cell(size(T, 1), 1);
-            for row = 1:size(T, 1)
-                csv = readtable(T.bids_fqfn(row));
-                timesMid{row} = double(asrow(csv.times));
-                img{row} = double(asrow(csv.ideal))/1e3; % kBq/mL
-            end
-            T = addvars(T, timesMid, img, NewVariableNames={'timesMid', 'img'});
-        end
-        function T = add_imaging(T)
-            imaging = cell(size(T, 1), 1);
-            timesMid = cell(size(T, 1), 1);
-            img = cell(size(T, 1), 1);
-            for row = 1:size(T, 1)
-                ic = mlfourd.ImagingContext2(T.bids_fqfn(row));
-                ic.selectImagingTool();
-                imaging{row} = ic;
-                timesMid_ = asrow(ic.json_metadata.timesMid);
-                viable = ~isnan(timesMid_);
-                timesMid{row} = double(timesMid_(viable));
-                img_ = asrow(ic.imagingFormat.img);
-                img{row} = double(img_(viable))/1e3; % kBq/mL
-            end
-            T = addvars(T, imaging, timesMid, img, NewVariableNames={'imaging', 'timesMid', 'img'});
-        end
-        function ic = build_kernel(hct, Nt, opts)
+        function ic = create_kernel(hct, Nt, opts)
             arguments
                 hct double
                 Nt double = 121
@@ -487,7 +510,156 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 copyfile(fp+e(1), fp1+e(1));
             end
         end
+    end
+        
+    %% PRIVATE
+
+    properties (Access=private)
+        found_
+        table_centerlines_
+        table_idif_nest_
+        table_idif_nii_
+        table_maframes_nii_
+        table_twilite_nest_
+        table_twilite_nii_
+    end
+
+    methods (Access = private)
+        function T = apply_adjusted_timesMid_img(this, T, if_type, opts)
+            arguments
+                this mlvg.Lee2024
+                T table
+                if_type {mustBeTextScalar}
+                opts.Dtidx double = -15 % shift tidx to accomodate delay of twilite measurements
+            end
+
+            assert(any(contains(T.Properties.VariableNames, "tidx")))
+
+            for row = 1:size(T, 1)
+                timesMid = T.timesMid{row};
+                img = T.img{row};
+                tidx = T.tidx(row);
+
+                switch char(if_type)
+                    case {'mipidif', 'idif'}
+                        img = img(tidx:end);
+                        timesMid = timesMid(tidx:end) - timesMid(tidx);
+                    case {'twilite', 'twil'}
+                        img = img(tidx+opts.Dtidx:end);
+                        timesMid = timesMid(tidx+opts.Dtidx:end) - timesMid(tidx+opts.Dtidx);
+                    otherwise
+                        error("mlvg:RuntimeError", stackstr())
+                end
+
+                T.timesMid{row} = timesMid;
+                T.img{row} = img;
+            end
+        end
+        function T = find_adjusted_timesMid_img(this, T, if_type)
+            arguments
+                this mlvg.Lee2024
+                T table
+                if_type {mustBeTextScalar}
+            end
+
+            tidx = nan(size(T.tracer));
+            for row = 1:size(T, 1)
+                tracer = T.tracer{row};
+                img = T.img{row};
+
+                switch char(if_type)
+                    case {'mipidif', 'idif'}
+                        tidx(row) = mlvg.Lee2024.find_takeoff(img, if_type, tracer); % rising beyond baseline
+                    case {'twilite', 'twil'}
+                        tidx(row) = mlvg.Lee2024.find_takeoff(img, if_type, tracer); % rising beyond baseline
+                    otherwise
+                        error("mlvg:RuntimeError", stackstr())
+                end
+            end
+
+            if ~contains(T.Properties.VariableNames, "tidx")
+                T = addvars(T, tidx, NewVariableNames={'tidx'});
+            else
+                T.tidx = tidx;
+            end
+        end
+        function T = strrep_bids_fqfn(this, opts)
+            %% updates this.table_maframes_nii_, replacing arbitrary strings with new strings
+
+            arguments
+                this
+                opts.s1 {mustBeTextScalar} = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity")
+                opts.s2 {mustBeTextScalar} = fullfile(getenv("SINGULARITY_HOME"))
+            end
+            
+            T = this.table_maframes_nii;
+            T.bids_fqfn = strrep(T.bids_fqfn, opts.s1, opts.s2);
+            this.table_maframes_nii_ = T;
+        end
+    end
+
+    methods (Static) %, Access = private)
+        function T = add_csv(T)
+            timesMid = cell(size(T, 1), 1);
+            img = cell(size(T, 1), 1);
+            for row = 1:size(T, 1)
+                csv = readtable(T.bids_fqfn(row));
+                timesMid{row} = double(asrow(csv.times));
+                img{row} = double(asrow(csv.ideal))/1e3; % kBq/mL
+            end
+            T = addvars(T, timesMid, img, NewVariableNames={'timesMid', 'img'});
+        end
+        function T = add_imaging(T)
+            imaging = cell(size(T, 1), 1);
+            timesMid = cell(size(T, 1), 1);
+            img = cell(size(T, 1), 1);
+            for row = 1:size(T, 1)
+                ic = mlfourd.ImagingContext2(T.bids_fqfn(row));
+                ic.selectImagingTool();
+                imaging{row} = ic;
+                timesMid_ = asrow(ic.json_metadata.timesMid);
+                viable = ~isnan(timesMid_);
+                timesMid{row} = double(timesMid_(viable));
+                img_ = asrow(ic.imagingFormat.img);
+                img{row} = double(img_(viable))/1e3; % kBq/mL
+            end
+            T = addvars(T, imaging, timesMid, img, NewVariableNames={'imaging', 'timesMid', 'img'});
+        end
+        function tidx = find_takeoff(img, if_type, trc)
+            arguments
+                img double
+                if_type {mustBeTextScalar} % mipidif, twilite, ...
+                trc {mustBeTextScalar} 
+            end
+
+            switch char(if_type)
+                case {'mipidif', 'idif'}
+                    thresh = 1e-3;
+                case {'twilite', 'twil'}
+                    img = img - mean(img(1:10)); % sub baseline
+                    switch trc
+                        case {'co', 'oc'}
+                            thresh = 0.25;
+                        case 'oo'
+                            thresh = 0.04;
+                        case 'ho'
+                            thresh = 0.04;
+                        case 'fdg'
+                            thresh = 0.07; % by inspection
+                        otherwise
+                            error("mlvg:RuntimeError", stackstr())
+                    end
+                otherwise
+                    error("mlvg:RuntimeError", ...
+                        "%s: %s, %s", stackstr(), if_type, trc)
+            end
+            [~,tidx] = max(img > thresh*max(img));
+        end
         function T = truncate_ses(T)
+            arguments
+                T table
+            end
+
             for bidx = 1:length(T.bids_fqfn)
                 fqfn = T.bids_fqfn(bidx);
                 parts = split(fqfn, filesep);
@@ -500,17 +672,38 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 T.bids_fqfn(bidx) = fullfile(filesep, parts{:});
             end
         end
-    end
-        
-    %% PRIVATE
+        function dt = ses2datetime(T)
+            arguments
+                T table
+            end
 
-    properties (Access=private)
-        found_
-        table_idif_nest_
-        table_idif_nii_
-        table_maframes_nii_
-        table_twilite_nest_
-        table_twilite_nii_
+            dt = NaT(size(T, 1));
+            for bidx = 1:length(T.bids_fqfn)
+                fqfn = T.bids_fqfn(bidx);
+                parts = split(fqfn, filesep);
+                selected = contains(parts, "ses-");
+                [~,sidx] = max(selected);
+                selected(sidx+1:end) = false;
+                ses = parts(selected);
+                dt(bidx) = datetime(extractBetween(ses, 5, 18), InputFormat="yyyyMMddHHmmss");
+            end
+        end
+        function lims = xlim(trc)
+            switch char(trc)
+                case {'co', 'oc'}
+                    lims = [0, 240];
+                case 'oo'
+                    lims = [0, 120];
+                case 'ho'
+                    lims = [0, 120];
+                case 'fdg'
+                    lims = [0, 120];
+                
+                otherwise
+                    error("mlvg:RuntimeError", ...
+                        "%s: %s", stackstr(), trc)
+            end
+        end
     end
     
     %  Created with mlsystem.Newcl, inspired by Frank Gonzalez-Morphy's newfcn.
