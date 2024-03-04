@@ -9,7 +9,7 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
         BIDS_MODALITIES = {'anat' 'fmap' 'func' 'mri' 'pet'}
         DLICV_TAG = 'DLICV'
         PROJECT_FOLDER = 'CCIR_01211'
-        SURFER_VERSION = '7.2.0'
+        SURFER_VERSION = '7.3.2'
     end
 
     methods
