@@ -1,66 +1,18 @@
 classdef Lee2024 < handle & mlsystem.IHandle
-    %% For manuscript to Physics in Biology & Medicine, 2024.
-    %  - all tables with numerical entries include inverse-efficiency
+    %% Top-level user interface for softwares supporting 
+    %  Lee, et al. to be submitted to Physics in Biology & Medicine, 2024.
+    %
+    %  See also:  mlvg.Lee2024_livescript.mlx
+    %
+    %  N.B.: all tables with numerical entries include inverse-efficiency
     %  
     %  Created 03-Jan-2024 21:45:43 by jjlee in repository /Users/jjlee/MATLAB-Drive/mlvg/src/+mlvg.
     %  Developed on Matlab 23.2.0.2459199 (R2023b) Update 5 for MACA64.  Copyright 2024 John J. Lee.
     
-    properties
-        
-    end
-
     methods
-        function plot_bland_altman_pars(this)
-            figure; hold on
-            colororder(plasma(9))
-            for pidx = [3,4,5,6,7,8,9,10,11]
-                [~,~,a,o] = this.bland_altman_for_model(parname="p"+pidx);
-                s = scatter(a,o, "filled");
-                s.SizeData = 100;
-                title("Bland-Altman residuals for normalized parameters");
-            end
-            fontsize(scale=1.5);
-            legend(this.par_labels__(4:12));
-            hold off
 
-            % figure; hold on
-            % colororder(viridis(11))
-            % for pidx = [1,2,3,4,5,6,7,8,9,10,11]
-            %     [p,q] = this.bland_altman_for_model(parname="p"+pidx);
-            %     s = scatter(p,q, "filled");
-            %     s.SizeData = 100;
-            %     title("AIF \rightarrow IDIF");
-            % end
-            % fontsize(scale=1.5);
-            % legend(this.par_labels__(2:12));
-            % hold off
-        end
-        function plot_bland_altman_subs(this)
-            figure; hold on
-            colororder(plasma(6))
-            for sidx = 1:6
-                [~,~,a,o] = this.bland_altman_for_model(subname=this.sub_names__(sidx));
-                s = scatter(a,o, "filled");
-                s.SizeData = 100;
-                title("Bland-Altman residuals for normalized parameters");
-            end
-            fontsize(scale=1.5);
-            legend("participant " + (1:6));
-            hold off
-        end
-        function plot_bland_altman_tracers(this)
-            figure; hold on
-            colororder(plasma(4))
-            for tidx = 1:4
-                [~,~,a,o] = this.bland_altman_for_model(tracer=this.tracers__(tidx));
-                s = scatter(a,o, "filled");
-                s.SizeData = 100;
-                title("Bland-Altman residuals for normalized parameters");
-            end
-            fontsize(scale=1.5);
-            legend(this.tracers__);
-            hold off
-        end
+        %% Bland-Altman
+
         function [q_twil,q_idif,abscissa,ordinate, coloring] = bland_altman_for_model(this, opts)
             arguments
                 this mlvg.Lee2024
@@ -132,7 +84,62 @@ classdef Lee2024 < handle & mlsystem.IHandle
             abscissa = (q_idif + q_twil) / 2;
             ordinate = (q_idif - q_twil); % avoid ./ abscissa for z-scores
         end
-        function draw_centerlines(this, row)            
+
+        function plot_bland_altman_pars(this)
+            figure; hold on
+            colororder(plasma(9))
+            for pidx = [3,4,5,6,7,8,9,10,11]
+                [~,~,a,o] = this.bland_altman_for_model(parname="p"+pidx);
+                s = scatter(a,o, "filled");
+                s.SizeData = 100;
+                title("Bland-Altman residuals for normalized parameters");
+            end
+            fontsize(scale=1.5);
+            legend(this.par_labels__(4:12));
+            hold off
+
+            % figure; hold on
+            % colororder(viridis(11))
+            % for pidx = [1,2,3,4,5,6,7,8,9,10,11]
+            %     [p,q] = this.bland_altman_for_model(parname="p"+pidx);
+            %     s = scatter(p,q, "filled");
+            %     s.SizeData = 100;
+            %     title("AIF \rightarrow IDIF");
+            % end
+            % fontsize(scale=1.5);
+            % legend(this.par_labels__(2:12));
+            % hold off
+        end
+        function plot_bland_altman_subs(this)
+            figure; hold on
+            colororder(plasma(6))
+            for sidx = 1:6
+                [~,~,a,o] = this.bland_altman_for_model(subname=this.sub_names__(sidx));
+                s = scatter(a,o, "filled");
+                s.SizeData = 100;
+                title("Bland-Altman residuals for normalized parameters");
+            end
+            fontsize(scale=1.5);
+            legend("participant " + (1:6));
+            hold off
+        end
+        function plot_bland_altman_tracers(this)
+            figure; hold on
+            colororder(plasma(4))
+            for tidx = 1:4
+                [~,~,a,o] = this.bland_altman_for_model(tracer=this.tracers__(tidx));
+                s = scatter(a,o, "filled");
+                s.SizeData = 100;
+                title("Bland-Altman residuals for normalized parameters");
+            end
+            fontsize(scale=1.5);
+            legend(this.tracers__);
+            hold off
+        end
+        
+        %% centerlines
+
+        function draw_centerlines(this, row)
             T = this.table_maframes_nii();
             pth = myfileparts(T.bids_fqfn(row));
             pth = strrep(pth, "sourcedata", "derivatives");
@@ -197,7 +204,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
 
             popd(pwd0);            
         end
-        function cl = view_centerline(this, row)            
+        function cl = view_centerline(this, row)
             T = this.table_maframes_nii();
             pth = myfileparts(T.bids_fqfn(row));
             pth = strrep(pth, "sourcedata", "derivatives");
@@ -236,191 +243,9 @@ classdef Lee2024 < handle & mlsystem.IHandle
 
             popd(pwd0);
         end
-        function build_all_twilite(this)
-            T = this.table_maframes_nii();
-            for row = 17:18 % 1:size(T, 1)
-                try
-                    fqfn = T.bids_fqfn{row};
-                    [pth,fp] = myfileparts(fqfn);
-                    TRC = this.filename2tracer(fqfn);
-
-                    % registry
-                    reg = mlvg.Ccir1211Registry.instance();
-                    reg.tracer = upper(TRC);
-
-                    % crv
-                    crv_fqfn = fullfile(getenv("HOME"), ...
-                        "Documents", "CCIRRadMeasurements", "Twilite", "CRV", this.fqfn2crv(fqfn));
-
-                    % ifk
-                    ifk = mlkinetics.InputFuncKit.create_from_tags( ...
-                        bids_fqfn=fqfn, ...
-                        bids_tags="ccir1211", ...
-                        tracer_tags=TRC, ...
-                        scanner_tags="vision", ...
-                        input_func_tags="twilite-nomodel-nocrop", ...
-                        input_func_fqfn=crv_fqfn, ...
-                        hct=T.hct(row)); % '-nocrop' ~ include Twilite activity prior to start of scanner
-                    twil_ic = ifk.do_make_activity_density(doDecayCorrection=true);
-                    plot(twil_ic);
-                    twil_ic.filepath = strrep(pth, "sourcedata", "derivatives");
-                    twil_ic.fileprefix = strrep(fp, ...
-                        "delay0-BrainMoCo2-createNiftiMovingAvgFrames", ...
-                        "TwiliteKit-do-make-input-func-nomodel_inputfunc");
-                    twil_ic.fileprefix = strrep(fp, ...
-                        "delay30-BrainMoCo2-createNiftiMovingAvgFrames", ...
-                        "TwiliteKit-do-make-input-func-nomodel_inputfunc");
-                    twil_ic.save();
-                catch ME
-                    handwarning(ME)
-                end
-            end
-        end
-        function deconv_twilite(this)
-            T = this.table_twilite_nii();
-            for row = 1:size(T, 1)
-                fqfn = T.bids_fqfn{row};
-                fqfp = myfileprefix(fqfn);
-                ic = mlfourd.ImagingFormatContext2(fqfn);
-                t = ic.json_metadata.timesMid;
-                rho = ic.img;
-                plot(t, rho); hold on
-
-                cath = mlswisstrace.Catheter_DT20190930( ...
-                    Measurement=rho, ...
-                    hct=T.hct(row), ...
-                    tracer=T.tracer{row}, ...
-                    fqfileprefix=fqfp+"_deconv_twilite");
-                rho1 = cath.deconv();
-                plot(t, rho1); hold off
-
-                title(ic.fqfn)
-            end
-        end
-        function call_ifk(this, row, opts)
-            arguments
-                this mlvg.Lee2024
-                row double
-                opts.steps logical = [0,0,0,0,1,0]
-                opts.delete_large_files logical = false
-                opts.reference_tracer {mustBeTextScalar} = "fdg"
-                opts.frac_select double = mlaif.MipIdif.ALPHA
-                opts.dilate_m double = 0
-            end
-
-            try
-                T = this.table_maframes_nii();
-                bids_fqfn = T.bids_fqfn(row);
-                if any(opts.steps(3:end)) % prep to use all time frames for IDIF
-                    bids_fqfn = strrep(bids_fqfn, "-delay30-", "-delay0-");
-                end
-                % if ~any(opts.steps(5:end))
-                %     bids_fqfn = strrep(bids_fqfn, "-createNiftiMovingAvgFrames", "-createNiftiStatic");
-                % end
-                assert(isfile(bids_fqfn)) % sanity
-                deriv_pth = strrep(fileparts(bids_fqfn), "sourcedata", "derivatives");
-                ensuredir(deriv_pth);
-                %deleteExisting(fullfile(deriv_pth, "*proc-MipIdif*"))
-
-                if strcmp(T.tracer(row), "fdg")
-                    tracer_tags = "18F";
-                else
-                    tracer_tags = "15O";
-                end
-
-                ifk = mlkinetics.InputFuncKit.create_from_tags( ...
-                    bids_fqfn=bids_fqfn, ...
-                    bids_tags="ccir1211", ...
-                    scanner_tags="vision", ...
-                    tracer_tags=tracer_tags, ...
-                    input_func_tags="mipidif");
-                ifk.do_make_input_func( ...
-                    steps=opts.steps, ...
-                    reference_tracer=opts.reference_tracer, ...
-                    delete_large_files=opts.delete_large_files, ...
-                    frac_select=opts.frac_select, ...
-                    dilate_m=opts.dilate_m);
-            catch ME
-                handwarning(ME)
-            end
-        end
-        function plot_bigraph(this, trc, ti)
-            Ttwil = this.table_twilite_nii();
-            Tidif = this.table_idif_nii();
-
-            Utwil = Ttwil(Ttwil.tracer == trc, :)
-            Uidif = Tidif(Tidif.tracer == trc, :)
-
-            figure; hold on
-            for r = 1:size(Uidif, 1)
-                timesMid__ = Uidif.timesMid{r};
-                img__ = Uidif.img{r};
-                if strcmp(trc, "oo") && r == 6
-                    selected = Uidif.img{r} > 2;
-                    selected(1:10) = true;
-                    timesMid__ = timesMid__(selected);
-                    img__ = img__(selected);
-                end
-                plot(timesMid__, img__, Color=Uidif.coloring{r}, LineWidth=4);
-            end
-            hold off
-            set(gca, XTickLabel=[]);
-            if strcmp(trc, "co")
-                ylabel("activity (kBq/mL)", FontSize=18); end
-            fontsize(scale = 2)
-            %title(ti, FontSize=24)
-            annotation('textbox', [.55 .58 .3 .3], 'String', ti, 'FitBoxToText', 'on', 'LineStyle', 'none', 'FontSize', 42); 
-            xlim(this.xlim(trc));
-            ylim(this.ylim(trc));
-
-            figure; hold on
-            for r = 1:size(Utwil, 1)
-                plot(Utwil.timesMid{r}, Utwil.img{r}, Color=Utwil.coloring{r}, LineWidth=4); end; hold off
-            set(gca, 'YDir', 'reverse')
-            xlabel("time (s)", FontSize=18);
-            fontsize(scale = 2)
-            xlim(this.xlim(trc));
-            ylim(this.ylim(trc));
-        end
-        function plot_bigraph_nest(this, trc, ti)
-            Ttwil = this.table_twilite_nest();
-            Tidif = this.table_idif_nest();
-
-            Utwil = Ttwil(Ttwil.tracer == trc, :)
-            Uidif = Tidif(Tidif.tracer == trc, :)
-
-            figure; hold on
-            for r = 1:size(Uidif, 1)
-                timesMid__ = Uidif.timesMid{r};
-                img__ = Uidif.img{r};
-                % if strcmp(trc, "oo") && r == 6
-                %     selected = Uidif.img{r} > 2;
-                %     selected(1:10) = true;
-                %     timesMid__ = timesMid__(selected);
-                %     img__ = img__(selected);
-                % end
-                plot(timesMid__, img__, Color=Uidif.coloring{r}, LineWidth=4); 
-            end
-            hold off
-            set(gca, XTickLabel=[]);
-            if strcmp(trc, "co")
-                ylabel("activity (kBq/mL)", FontSize=18); end
-            fontsize(scale = 2)
-            %title(ti, FontSize=24)
-            annotation('textbox', [.55 .58 .3 .3], 'String', ti, 'FitBoxToText', 'on', 'LineStyle', 'none', 'FontSize', 42); 
-            xlim(this.xlim(trc));
-            ylim(this.ylim(trc, true));
-
-            figure; hold on
-            for r = 1:size(Utwil, 1)
-                plot(Utwil.timesMid{r}, Utwil.img{r}, Color=Utwil.coloring{r}, LineWidth=4); end; hold off
-            set(gca, 'YDir', 'reverse')
-            xlabel("time (s)", FontSize=18)
-            fontsize(scale = 2)
-            xlim(this.xlim(trc));
-            ylim(this.ylim(trc, true));
-        end
         
+        %% tables
+
         function T = table_centerlines(this)
             arguments
                 this mlvg.Lee2024
@@ -434,6 +259,67 @@ classdef Lee2024 < handle & mlsystem.IHandle
             T = this.table_maframes_nii;
             T.bids_fqfn = fullfile( ...
                 myfileparts(strrep(T.bids_fqfn, "sourcedata", "derivatives")), "centerline_on_pet");
+        end
+        function T = table_idif_nest(this, matched)
+            arguments
+                this mlvg.Lee2024
+                matched logical = true
+            end
+
+            if ~isempty(this.table_idif_nest_)
+                T = this.table_idif_nest_;
+                return
+            end
+
+            T = this.table_maframes_timeAppend_nii;
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", "MipIdif_idif_dynesty-Boxcar-ideal.csv");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-4.nii.gz", "MipIdif_idif_dynesty-Boxcar-ideal.csv");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-80.nii.gz", "MipIdif_idif_dynesty-Boxcar-ideal.csv");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-165.nii.gz", "MipIdif_idif_dynesty-Boxcar-ideal.csv");
+            T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
+
+            % include only files on the filesystem
+            if matched
+                [~,found] = this.table_idif_nii(true);
+                T = T(found, :);
+                T = this.add_csv(T, false);
+                T = this.add_peak_position(T);
+
+                %T = addvars(T, T0.tidx, NewVariableNames={'tidx'});
+                %T = this.apply_adjusted_timesMid_img(T, "idif");
+                this.table_idif_nest_ = T;
+            end
+        end
+        function [T,found] = table_idif_nii(this, matched)
+            arguments
+                this mlvg.Lee2024
+                matched logical = true
+            end
+
+            if ~isempty(this.table_idif_nii_) && ~isempty(this.found_)
+                T = this.table_idif_nii_;
+                found = this.found_;                
+                return
+            end
+
+            T = this.table_maframes_nii;
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames", "MipIdif_idif");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-4", "MipIdif_idif");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-80", "MipIdif_idif");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-165", "MipIdif_idif");
+            T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
+
+            % include only files on the filesystem
+            if matched
+                [~,found] = this.table_twilite_nii(true);
+                T = T(found, :);
+                T = this.add_imaging(T, false);
+
+                %T = this.find_adjusted_timesMid_img(T, "idif");
+                %T = this.apply_adjusted_timesMid_img(T, "idif");
+                this.table_idif_nii_ = T;
+            end
+
         end
         function T = table_maframes_nii(this)
             %% table of moving-average frames (dynamic)
@@ -592,14 +478,15 @@ classdef Lee2024 < handle & mlsystem.IHandle
             %% local filesystems
 
             if contains(hostname, "twistor")
-                this.strrep_bids_fqfn();
+                this.table_maframes_nii_ = this.strrep_bids_fqfn(this.table_maframes_nii_);
+                T = this.strrep_bids_fqfn(T);
             end
         end
         function T = table_maframes_timeAppend_nii(this)
             %% table of moving-average frames (dynamic)
 
-            if ~isempty(this.table_maframes_nii_)
-                T = this.table_maframes_nii_;
+            if ~isempty(this.table_maframes_timeAppend_nii_)
+                T = this.table_maframes_timeAppend_nii_;
                 return
             end
 
@@ -746,70 +633,15 @@ classdef Lee2024 < handle & mlsystem.IHandle
             inveff = ascol(inveff);  
             coloring = ascol(coloring);
 
-            this.table_maframes_nii_ = table(sub, ses, bids_fqfn, tracer, hct, inveff, coloring); % , console_clock
-            T = this.table_maframes_nii_;
+            this.table_maframes_timeAppend_nii_ = table(sub, ses, bids_fqfn, tracer, hct, inveff, coloring); % , console_clock
+            T = this.table_maframes_timeAppend_nii_;
 
             %% local filesystems
 
             if contains(hostname, "twistor")
-                this.strrep_bids_fqfn();
+                this.table_maframes_timeAppend_nii_ = this.strrep_bids_fqfn(this.table_maframes_timeAppend_nii_);
+                T = this.strrep_bids_fqfn(T);
             end
-        end
-        function T = table_idif_nest(this, matched)
-            arguments
-                this mlvg.Lee2024
-                matched logical = true
-            end
-
-            if ~isempty(this.table_idif_nest_)
-                T = this.table_idif_nest_;
-                return
-            end
-
-            T = this.table_maframes_nii;
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", "MipIdif_idif_dynesty-Boxcar-ideal.csv");
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay30-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", "MipIdif_idif_dynesty-Boxcar-ideal.csv");
-            T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
-
-            % include only files on the filesystem
-            if matched
-                [~,found] = this.table_idif_nii(true);
-                T = T(found, :);
-                T = this.add_csv(T, false);
-
-                %T = addvars(T, T0.tidx, NewVariableNames={'tidx'});
-                %T = this.apply_adjusted_timesMid_img(T, "idif");
-                this.table_idif_nest_ = T;
-            end
-        end
-        function [T,found] = table_idif_nii(this, matched)
-            arguments
-                this mlvg.Lee2024
-                matched logical = true
-            end
-
-            if ~isempty(this.table_idif_nii_) && ~isempty(this.found_)
-                T = this.table_idif_nii_;
-                found = this.found_;                
-                return
-            end
-
-            T = this.table_maframes_nii;
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames", "MipIdif_idif");
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay30-BrainMoCo2-createNiftiMovingAvgFrames", "MipIdif_idif");
-            T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
-
-            % include only files on the filesystem
-            if matched
-                [~,found] = this.table_twilite_nii(true);
-                T = T(found, :);
-                T = this.add_imaging(T, false);
-
-                %T = this.find_adjusted_timesMid_img(T, "idif");
-                %T = this.apply_adjusted_timesMid_img(T, "idif");
-                this.table_idif_nii_ = T;
-            end
-
         end
         function T = table_twilite_nest(this, matched)
             arguments
@@ -822,9 +654,11 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 return
             end
 
-            T = this.table_maframes_nii;
+            T = this.table_maframes_timeAppend_nii;
             T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", "TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal.csv");
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay30-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", "TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal.csv");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-4.nii.gz", "TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal.csv");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-80.nii.gz", "TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal.csv");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-165.nii.gz", "TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal.csv");
             T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
 
             % include only files on the filesystem
@@ -832,6 +666,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 [~,found] = this.table_twilite_nii(true);
                 T = T(found, :);
                 T = this.add_csv(T, true);
+                T = this.add_peak_position(T);
                 
                 %T = addvars(T, T0.tidx, NewVariableNames={'tidx'});
                 %T = this.apply_adjusted_timesMid_img(T, "twil");
@@ -852,7 +687,9 @@ classdef Lee2024 < handle & mlsystem.IHandle
             
             T = this.table_maframes_nii;
             T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames", "TwiliteKit-do-make-input-func-nomodel_inputfunc");
-            T.bids_fqfn = strrep(T.bids_fqfn, "delay30-BrainMoCo2-createNiftiMovingAvgFrames", "TwiliteKit-do-make-input-func-nomodel_inputfunc");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-4", "TwiliteKit-do-make-input-func-nomodel_inputfunc");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-80", "TwiliteKit-do-make-input-func-nomodel_inputfunc");
+            T.bids_fqfn = strrep(T.bids_fqfn, "delay0-BrainMoCo2-createNiftiMovingAvgFrames_timeAppend-165", "TwiliteKit-do-make-input-func-nomodel_inputfunc");
             T.bids_fqfn = strrep(T.bids_fqfn, "sourcedata", "derivatives");
             found = [];
 
@@ -869,90 +706,197 @@ classdef Lee2024 < handle & mlsystem.IHandle
             end
         end
 
-        function build_all_maframes_timeAppend_parc(this)
-            import mlkinetics.*
+        %% bigraphs
 
-            T = this.table_maframes_timeAppend_nii;
-            parfor (row = 1:size(T, 1), 8)
-                petFqfn = T.bids_fqfn(row);
-                this.build_maframes_timeAppend_parc(petFqfn);
+        function build_all_twilite(this)
+            T = this.table_maframes_nii();
+            for row = 17:18 % 1:size(T, 1)
+                try
+                    fqfn = T.bids_fqfn{row};
+                    [pth,fp] = myfileparts(fqfn);
+                    TRC = this.filename2tracer(fqfn);
+
+                    % registry
+                    reg = mlvg.Ccir1211Registry.instance();
+                    reg.tracer = upper(TRC);
+
+                    % crv
+                    crv_fqfn = fullfile(getenv("HOME"), ...
+                        "Documents", "CCIRRadMeasurements", "Twilite", "CRV", this.fqfn2crv(fqfn));
+
+                    % ifk
+                    ifk = mlkinetics.InputFuncKit.create_from_tags( ...
+                        bids_fqfn=fqfn, ...
+                        bids_tags="ccir1211", ...
+                        tracer_tags=TRC, ...
+                        scanner_tags="vision", ...
+                        input_func_tags="twilite-nomodel-nocrop", ...
+                        input_func_fqfn=crv_fqfn, ...
+                        hct=T.hct(row)); % '-nocrop' ~ include Twilite activity prior to start of scanner
+                    twil_ic = ifk.do_make_activity_density(doDecayCorrection=true);
+                    plot(twil_ic);
+                    twil_ic.filepath = strrep(pth, "sourcedata", "derivatives");
+                    twil_ic.fileprefix = strrep(fp, ...
+                        "delay0-BrainMoCo2-createNiftiMovingAvgFrames", ...
+                        "TwiliteKit-do-make-input-func-nomodel_inputfunc");
+                    twil_ic.fileprefix = strrep(fp, ...
+                        "delay30-BrainMoCo2-createNiftiMovingAvgFrames", ...
+                        "TwiliteKit-do-make-input-func-nomodel_inputfunc");
+                    twil_ic.save();
+                catch ME
+                    handwarning(ME)
+                end
             end
         end
-        function build_maframes_timeAppend_parc(this, petFqfn)
+        function deconv_twilite(this)
+            T = this.table_twilite_nii();
+            for row = 1:size(T, 1)
+                fqfn = T.bids_fqfn{row};
+                fqfp = myfileprefix(fqfn);
+                ic = mlfourd.ImagingFormatContext2(fqfn);
+                t = ic.json_metadata.timesMid;
+                rho = ic.img;
+                plot(t, rho); hold on
+
+                cath = mlswisstrace.Catheter_DT20190930( ...
+                    Measurement=rho, ...
+                    hct=T.hct(row), ...
+                    tracer=T.tracer{row}, ...
+                    fqfileprefix=fqfp+"_deconv_twilite");
+                rho1 = cath.deconv();
+                plot(t, rho1); hold off
+
+                title(ic.fqfn)
+            end
+        end
+        
+        function call_ifk(this, row, opts)
             arguments
                 this mlvg.Lee2024
-                petFqfn {mustBeFile}
+                row double
+                opts.steps logical = [0,0,0,0,1,0]
+                opts.delete_large_files logical = false
+                opts.reference_tracer {mustBeTextScalar} = "fdg"
+                opts.frac_select double = mlaif.MipIdif.ALPHA
+                opts.dilate_m double = 0
             end
 
-            import mlkinetics.*
-
-            petMed = mlvg.Ccir1211Mediator.create(petFqfn);
-
-            flirt = mlfsl.Flirt( ...
-                'in', petMed.schaeffer_ic, ...
-                'ref', petMed.imagingReference, ...
-                'out', strcat(petMed.fqfp, "-schaeffer.nii.gz"), ...
-                'omat', fullfile(petMed.derivPetPath, "T1w_on_" + petMed.imagingReference.fileprefix + ".mat"), ...
-                'bins', 1024, ...
-                'interp', 'nearestneighbour', ...
-                'noclobber', false);
-            flirt.applyXfm();
-
-            schBK = BidsKit.create( ...
-                bids_tags="ccir1211", bids_fqfn=flirt.out.fqfn);
-            rk = RepresentationKit.create( ...
-                representation_tags="trivial");
-            pk = ParcKit.create( ...
-                bids_kit=schBK, representation_kit=rk, parc_tags="schaeffer-schaeffer");
-
-            p = pk.make_parc();
-            ic1 = p.reshape_to_parc(petMed.imagingContext);
-            disp(ic1)
-            %ic1.view()
-            %ic1.view()
-            ic1.filepath = strrep(ic1.filepath, "sourcedata", "derivatives");
-            ic1.save();
-        end
-        function build_TwiliteKit_nomodel_recalibrated_inputfunc(this)
-            T = this.table_maframes_timeAppend_nii();
-            for row = 1:size(T, 1)
-                fqfn = T.bids_fqfn(row);
-                fqfn = strrep(fqfn, "sourcedata", "derivatives");
-                idx = strfind(fqfn, "_proc-");
-                fqfnc = convertStringsToChars(fqfn);
-                fqfn_twil = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel_inputfunc.nii.gz";
-                fqfn_recal = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel-recalibrated_inputfunc.nii.gz";
-                
-                if ~isfile(fqfn_twil)
-                    continue
+            try
+                T = this.table_maframes_nii();
+                bids_fqfn = T.bids_fqfn(row);
+                if any(opts.steps(3:end)) % prep to use all time frames for IDIF
+                    bids_fqfn = strrep(bids_fqfn, "-delay30-", "-delay0-");
                 end
-                disp(fqfn_twil)
-                ic = mlfourd.ImagingContext2(fqfn_twil);
-                ic = ic ./ T.inveff(row);
-                ic.fqfn = fqfn_recal;
-                ic.save()
-            end
-        end
-        function build_RadialArtery_ideal_recalibrated(this)
-            T = this.table_maframes_timeAppend_nii();
-            for row = 1:size(T, 1)
-                fqfn = T.bids_fqfn(row);
-                fqfn = strrep(fqfn, "sourcedata", "derivatives");
-                idx = strfind(fqfn, "_proc-");
-                fqfnc = convertStringsToChars(fqfn);
-                fqfn_twil = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal.nii.gz";
-                fqfn_recal = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal-recalibrated.nii.gz";
-                
-                if ~isfile(fqfn_twil)
-                    continue
+                % if ~any(opts.steps(5:end))
+                %     bids_fqfn = strrep(bids_fqfn, "-createNiftiMovingAvgFrames", "-createNiftiStatic");
+                % end
+                assert(isfile(bids_fqfn)) % sanity
+                deriv_pth = strrep(fileparts(bids_fqfn), "sourcedata", "derivatives");
+                ensuredir(deriv_pth);
+                %deleteExisting(fullfile(deriv_pth, "*proc-MipIdif*"))
+
+                if strcmp(T.tracer(row), "fdg")
+                    tracer_tags = "18F";
+                else
+                    tracer_tags = "15O";
                 end
-                disp(fqfn_twil)
-                ic = mlfourd.ImagingContext2(fqfn_twil);
-                ic = ic ./ T.inveff(row);
-                ic.fqfn = fqfn_recal;
-                ic.save()
+
+                ifk = mlkinetics.InputFuncKit.create_from_tags( ...
+                    bids_fqfn=bids_fqfn, ...
+                    bids_tags="ccir1211", ...
+                    scanner_tags="vision", ...
+                    tracer_tags=tracer_tags, ...
+                    input_func_tags="mipidif");
+                ifk.do_make_input_func( ...
+                    steps=opts.steps, ...
+                    reference_tracer=opts.reference_tracer, ...
+                    delete_large_files=opts.delete_large_files, ...
+                    frac_select=opts.frac_select, ...
+                    dilate_m=opts.dilate_m);
+            catch ME
+                handwarning(ME)
             end
         end
+        
+        function plot_bigraph(this, trc, ti)
+            Ttwil = this.table_twilite_nii();
+            Tidif = this.table_idif_nii();
+
+            Utwil = Ttwil(Ttwil.tracer == trc, :)
+            Uidif = Tidif(Tidif.tracer == trc, :)
+
+            figure; hold on
+            for r = 1:size(Uidif, 1)
+                timesMid__ = Uidif.timesMid{r};
+                img__ = Uidif.img{r};
+                if strcmp(trc, "oo") && r == 6
+                    selected = Uidif.img{r} > 2;
+                    selected(1:10) = true;
+                    timesMid__ = timesMid__(selected);
+                    img__ = img__(selected);
+                end
+                plot(timesMid__, img__, Color=Uidif.coloring{r}, LineWidth=4);
+            end
+            hold off
+            set(gca, XTickLabel=[]);
+            if strcmp(trc, "co")
+                ylabel("activity (kBq/mL)", FontSize=18); end
+            fontsize(scale = 2)
+            %title(ti, FontSize=24)
+            annotation('textbox', [.55 .58 .3 .3], 'String', ti, 'FitBoxToText', 'on', 'LineStyle', 'none', 'FontSize', 42); 
+            xlim(this.xlim(trc));
+            ylim(this.ylim(trc));
+
+            figure; hold on
+            for r = 1:size(Utwil, 1)
+                plot(Utwil.timesMid{r}, Utwil.img{r}, Color=Utwil.coloring{r}, LineWidth=4); end; hold off
+            set(gca, 'YDir', 'reverse')
+            xlabel("time (s)", FontSize=18);
+            fontsize(scale = 2)
+            xlim(this.xlim(trc));
+            ylim(this.ylim(trc));
+        end
+        function plot_bigraph_nest(this, trc, ti)
+            Ttwil = this.table_twilite_nest();
+            Tidif = this.table_idif_nest();
+
+            Utwil = Ttwil(Ttwil.tracer == trc, :)
+            Uidif = Tidif(Tidif.tracer == trc, :)
+
+            figure; hold on
+            for r = 1:size(Uidif, 1)
+                timesMid__ = Uidif.timesMid{r};
+                img__ = Uidif.img{r};
+                % if strcmp(trc, "oo") && r == 6
+                %     selected = Uidif.img{r} > 2;
+                %     selected(1:10) = true;
+                %     timesMid__ = timesMid__(selected);
+                %     img__ = img__(selected);
+                % end
+                plot(timesMid__, img__, Color=Uidif.coloring{r}, LineWidth=4); 
+            end
+            hold off
+            set(gca, XTickLabel=[]);
+            if strcmp(trc, "co")
+                ylabel("activity (kBq/mL)", FontSize=18); end
+            fontsize(scale = 2)
+            %title(ti, FontSize=24)
+            annotation('textbox', [.55 .58 .3 .3], 'String', ti, 'FitBoxToText', 'on', 'LineStyle', 'none', 'FontSize', 42); 
+            xlim(this.xlim(trc));
+            ylim(this.ylim(trc, true));
+
+            figure; hold on
+            for r = 1:size(Utwil, 1)
+                plot(Utwil.timesMid{r}, Utwil.img{r}, Color=Utwil.coloring{r}, LineWidth=4); end; hold off
+            set(gca, 'YDir', 'reverse')
+            xlabel("time (s)", FontSize=18)
+            fontsize(scale = 2)
+            xlim(this.xlim(trc));
+            ylim(this.ylim(trc, true));
+        end
+        
+        %% build recovery coefficients
+
         function C = build_all_recovery_coeff(this)
             U = this.table_idif_nii();
             U = U(U.tracer == "co", :);
@@ -1035,6 +979,171 @@ classdef Lee2024 < handle & mlsystem.IHandle
             fprintf("median(rc) -> %g\n", median(rc))
 
         end
+        function C = build_all_recovery_coeff2(this, tracer)
+            arguments
+                this mlvg.Lee2024
+                tracer {mustBeTextScalar}
+            end
+
+            U = this.table_idif_nest();
+            U = U(U.tracer == tracer, :);
+            V = this.table_twilite_nest();
+            V = V(V.tracer == tracer, :);
+
+            C = cell(1, size(V, 1));
+            rc = [];
+            idif = [];
+            twil = [];
+            residual = [];
+            estimator = [];
+            rgb = [];
+            for row = 1:size(U, 1)
+                coloring = U.coloring{row};
+                [ifc_rc, ifc_idif, ifc_twil] = this.build_recovery_coeff2(U(row,:), V(row,:));
+                C{row} = struct( ...
+                    "rc_img", ifc_rc.img, ...
+                    "idif_img", ifc_idif.img, ...
+                    "twil_img", ifc_twil.img, ...
+                    "residual", ifc_idif.img - ifc_twil.img, ...
+                    "estimator", 0.5*(ifc_idif.img + ifc_twil.img), ...
+                    "coloring", coloring);
+
+                rc = [rc, asrow(ifc_rc.img)];
+                idif = [idif, asrow(ifc_idif.img)];
+                twil = [twil, asrow(ifc_twil.img)];
+                residual = [residual, asrow(ifc_idif.img - ifc_twil.img)];
+                estimator = [estimator, asrow(0.5*(ifc_idif.img + ifc_twil.img))];
+                rgb = [rgb; repmat(coloring, flip(size(ifc_rc)))];
+            end
+
+            ONES = ones(size(rc));
+
+            figure;
+            hold on
+            LS = linspace(0, max(estimator), 500);
+            plot(LS, zeros(size(LS)), "-", LineWidth=0.25, Color=[0.5, 0.5, 0.5])
+            s2 = scatter(estimator, residual, 100*ONES, rgb, "filled");
+            s2.AlphaData = 0.05*ONES;
+            s2.MarkerFaceAlpha = 0.2;
+            title("Bland-Altman residuals for " + upper(tracer))
+            xlabel("unbiased estimator of decays (kBq s/mL)")
+            ylabel("IDIF decays - AIF decays (kBq s/mL)")
+            %xlim([0 30e3])
+            %ylim([min() max()])
+            fontsize(scale=1.5)
+            hold off
+
+            return
+
+            figure;
+            hold on
+            LS = linspace(0, max(twil), 500);
+            plot(LS, LS, "-", LineWidth=0.25, Color=[0.5, 0.5, 0.5])
+            s1 = scatter(twil, idif, 100*ONES, rgb, "filled");
+            s1.AlphaData = 0.05*ONES;
+            s1.MarkerFaceAlpha = 0.2;
+            title("Bland-Altman scatter for " + upper(tracer))
+            xlabel("AIF decays (kBq s/mL)")
+            ylabel("IDIF decays (kBq s/mL)")
+            %xlim([0 220])
+            %ylim([0 220])
+            fontsize(scale=1.5)
+            hold off
+
+            figure;
+            hold on
+            LS = linspace(0, max(estimator), 500);
+            plot(LS, ones(size(LS)), "-", LineWidth=0.25, Color=[0.5, 0.5, 0.5])
+            s3 = scatter(estimator, rc, 100*ONES, rgb, "filled");
+            s3.AlphaData = 0.05*ONES;
+            s3.MarkerFaceAlpha = 0.2;
+            title("Recovery coefficients for " + upper(tracer))
+            xlabel("unbiased estimator of decays (kBq s/mL)")
+            ylabel("recovery coefficient")
+            %xlim([0 160])
+            ylim([0 2])
+            fontsize(scale=1.5)
+            hold off
+
+            fprintf("median(rc) -> %g\n", median(rc))
+
+        end
+        function [ifc_rc, ifc_idif, ifc_twil] = build_recovery_coeff2(this, U, V)
+
+            if contains(U.tracer, "fdg")
+                [ifc_rc, ifc_idif, ifc_twil] = this.build_recovery_coeff2_fdg(U, V);
+                return
+            end
+
+            halflife = 122.2416;  % sec
+            U_ic = mlfourd.ImagingContext2(myfileprefix(U.bids_fqfn{1}) + ".nii.gz");
+            ifc_idif = U_ic.imagingFormat;
+            ifc_twil = U_ic.imagingFormat;
+            ifc_rc = U_ic.imagingFormat;
+
+            %U_tM = U.timesMid{1};
+            %V_tM = V.timesMid{1};
+            U_img = U.img{1};
+            V_img = V.img{1};
+            U_pp = U.peak_position(1);
+            V_pp = V.peak_position(1);
+            Dt = V_pp - U_pp;
+            V_img = V_img .* 2.^(Dt/ halflife);
+            Nt = min(length(U_img) - U_pp + 1, length(V_img) - V_pp + 1);
+            ifc_idif.img = nan(1, Nt);
+            ifc_twil.img = nan(1, Nt);
+            ifc_rc.img = nan(1, Nt);
+
+            for t = 1:Nt
+                ifc_idif.img(t) = sum(U_img(1:U_pp+t-1));
+                ifc_twil.img(t) = sum(V_img(1:V_pp+t-1));
+            end
+            ifc_rc.img = ifc_idif.img ./ ifc_twil.img;
+
+            s = split(U_ic.fileprefix, "proc-");
+            ifc_idif.fileprefix = s(1) + "proc-build-rc2_idif";
+            ifc_idif.save();
+            ifc_twil.fileprefix = s(1) + "proc-build-rc2_twil";
+            ifc_twil.save();
+            ifc_rc.fileprefix = s(1) + "proc-build-rc2_rc";
+            ifc_rc.save();
+        end
+        function [ifc_rc, ifc_idif, ifc_twil] = build_recovery_coeff2_fdg(~, U, V)
+
+            halflife = 1.82951 * 3600;  % sec
+            U_ic = mlfourd.ImagingContext2(myfileprefix(U.bids_fqfn{1}) + "-embed.nii.gz");
+            V_ic = mlfourd.ImagingContext2(myfileprefix(V.bids_fqfn{1}) + "-embed.nii.gz");
+            ifc_idif = U_ic.imagingFormat;
+            ifc_twil = V_ic.imagingFormat;
+            ifc_rc = copy(U_ic.imagingFormat);
+
+            %U_tM = U.timesMid{1};
+            %V_tM = V.timesMid{1};
+            U_img = ifc_idif.img;
+            V_img = ifc_twil.img;
+            [~,U_pp] = max(U_img);
+            [~,V_pp] = max(V_img);
+            Dt = V_pp - U_pp;
+            V_img = V_img .* 2.^(Dt/ halflife);
+            Nt = min(length(U_img) - U_pp + 1, length(V_img) - V_pp + 1);
+            ifc_idif.img = nan(1, Nt);
+            ifc_twil.img = nan(1, Nt);
+            ifc_rc.img = nan(1, Nt);
+
+            for t = 1:Nt
+                ifc_idif.img(t) = sum(U_img(1:U_pp+t-1));
+                ifc_twil.img(t) = sum(V_img(1:V_pp+t-1));
+            end
+            ifc_rc.img = ifc_idif.img ./ ifc_twil.img;
+
+            s = split(U_ic.fileprefix, "proc-");
+            ifc_idif.fileprefix = s(1) + "proc-build-rc2_idif";
+            ifc_idif.save();
+            ifc_twil.fileprefix = s(1) + "proc-build-rc2_twil";
+            ifc_twil.save();
+            ifc_rc.fileprefix = s(1) + "proc-build-rc2_rc";
+            ifc_rc.save();
+        end
         function [ifc_rc, ifc_idif, ifc_twil] = build_recovery_coeff(~, U, V, ic)
 
             U_img = U.img{1};
@@ -1065,11 +1174,133 @@ classdef Lee2024 < handle & mlsystem.IHandle
             ifc_twil.save();
 
             ifc_rc = ic.imagingFormat;
-            ifc_rc.img = V_img(1:Nt) ./ U_img(1:Nt);
+            ifc_rc.img = U_img(1:Nt) ./ V_img(1:Nt);
             ifc_rc.fileprefix = strrep(ic.fileprefix, "MipIdif_idif", stackstr(use_dashes=true) + "_rc");
             %figure; plot(ifc_rc)
             ifc_rc.save();
         end
+        
+        %% more building
+        
+        function build_all_maframes_timeAppend_parc(this)
+            import mlkinetics.*
+
+            T = this.table_maframes_timeAppend_nii;
+            parfor (row = 1:size(T, 1), 8)
+                petFqfn = T.bids_fqfn(row);
+                this.build_maframes_timeAppend_parc(petFqfn);
+            end
+        end
+        function build_maframes_timeAppend_parc(this, petFqfn)
+            arguments
+                this mlvg.Lee2024
+                petFqfn {mustBeFile}
+            end
+
+            import mlkinetics.*
+
+            petMed = mlvg.Ccir1211Mediator.create(petFqfn);
+
+            flirt = mlfsl.Flirt( ...
+                'in', petMed.schaeffer_ic, ...
+                'ref', petMed.imagingReference, ...
+                'out', strcat(petMed.fqfp, "-schaeffer.nii.gz"), ...
+                'omat', fullfile(petMed.derivPetPath, "T1w_on_" + petMed.imagingReference.fileprefix + ".mat"), ...
+                'bins', 1024, ...
+                'interp', 'nearestneighbour', ...
+                'noclobber', false);
+            flirt.applyXfm();
+
+            schBK = BidsKit.create( ...
+                bids_tags="ccir1211", bids_fqfn=flirt.out.fqfn);
+            rk = RepresentationKit.create( ...
+                representation_tags="trivial");
+            pk = ParcKit.create( ...
+                bids_kit=schBK, representation_kit=rk, parc_tags="schaeffer-schaeffer");
+
+            p = pk.make_parc();
+            ic1 = p.reshape_to_parc(petMed.imagingContext);
+            disp(ic1)
+            %ic1.view()
+            %ic1.view()
+            ic1.filepath = strrep(ic1.filepath, "sourcedata", "derivatives");
+            ic1.save();
+        end
+        
+        function build_qms_as_dtseries(this, filenames_toglob, tags)
+            arguments
+                this mlvg.Lee2024
+                filenames_toglob {mustBeText}  % appended to $SINGULARITY_HOME/CCIR_01211/derivatives/sub-*/ses-*/pet
+                tags {mustBeTextScalar}
+            end
+
+            for tog = asrow(filenames_toglob)
+                globbed = mglob( ...
+                    fullfile( ...
+                        getenv("SINGULARITY_HOME"), "CCIR_01211", "derivatives", "sub-*", "ses-*", "pet", ...
+                        tog(1)));
+                trc = this.filename2tracer(globbed(1));
+                new_fqfn = fullfile( ...
+                    getenv("SINGULARITY_HOME"), "CCIR_01211", "derivatives", ...
+                    sprintf("sub-all_ses-all_trc-%s_proc-schaeffer-%s", trc, tags));
+                Nkind = 1; % this.filename2Nkind(globbed(1));
+                for k = 1:Nkind
+                    m = this.infer_multiplier(globbed(1), k);
+                    cifti = mlvg.Lee2024.qms_to_dtseries(globbed, new_fqfn+"-kind"+k, qm_kind=k, multiplier=m);
+
+                    %% write median(, 2)
+
+                    cifti.cdata = median(cifti.cdata, 2);
+                    cifti.diminfo{2} = cifti_diminfo_make_scalars(1);
+                    [pth,fp] = myfileparts(new_fqfn+"-kind"+k);
+                    cifti_write(cifti, convertStringsToChars(fullfile(pth, fp + "_median_2.dscalar.nii")));
+                end
+            end
+        end
+       
+        function build_TwiliteKit_nomodel_recalibrated_inputfunc(this)
+            T = this.table_maframes_timeAppend_nii();
+            for row = 1:size(T, 1)
+                fqfn = T.bids_fqfn(row);
+                fqfn = strrep(fqfn, "sourcedata", "derivatives");
+                idx = strfind(fqfn, "_proc-");
+                fqfnc = convertStringsToChars(fqfn);
+                fqfn_twil = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel_inputfunc.nii.gz";
+                fqfn_recal = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel-recalibrated_inputfunc.nii.gz";
+                
+                if ~isfile(fqfn_twil)
+                    continue
+                end
+                disp(fqfn_twil)
+                ic = mlfourd.ImagingContext2(fqfn_twil);
+                ic = ic ./ T.inveff(row);
+                ic.fqfn = fqfn_recal;
+                ic.save()
+            end
+        end
+        function build_RadialArtery_ideal_recalibrated(this)
+            T = this.table_maframes_timeAppend_nii();
+            for row = 1:size(T, 1)
+                fqfn = T.bids_fqfn(row);
+                fqfn = strrep(fqfn, "sourcedata", "derivatives");
+                idx = strfind(fqfn, "_proc-");
+                fqfnc = convertStringsToChars(fqfn);
+                fqfn_twil = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal.nii.gz";
+                fqfn_recal = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal-recalibrated.nii.gz";
+                
+                if ~isfile(fqfn_twil)
+                    continue
+                end
+                disp(fqfn_twil)
+                ic = mlfourd.ImagingContext2(fqfn_twil);
+                ic = ic ./ T.inveff(row);
+                ic.fqfn = fqfn_recal;
+                ic.save()
+            end
+        end
+
+        
+        
         function build_all_martin_v1(this)
             import mlkinetics.*
 
@@ -1148,14 +1379,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
             ifc3.fileprefix = ifc3.fileprefix + "-twilite_martinv1";
             ifc3.save();    
         end
-        function build_raichle_ks(this)
-        end
-        function build_mintun_ks(this)
-        end
-        function build_huang_ks(this)
-        end
-        function build_BIC(this)
-        end
+                
         function build_schaeffer_parc(this, select_tag)
             arguments
                 this mlvg.Lee2024
@@ -1263,6 +1487,83 @@ classdef Lee2024 < handle & mlsystem.IHandle
             % plot(ic);
             ic.fileprefix = ic.fileprefix + "-embed";
             % ic.save();
+        end
+        function cifti = qms_to_dtseries(qm_fqfns, new_fqfn, opts)
+            arguments
+                qm_fqfns {mustBeText}
+                new_fqfn {mustBeTextScalar}
+                opts.qm_kind {mustBeScalarOrEmpty} = 1
+                opts.multiplier single {mustBeScalarOrEmpty} = 1  % for CBF or PS, multiplier ~ 60
+                opts.do_write logical = true
+            end
+            if ~endsWith(new_fqfn, '.dtseries.nii')
+                new_fqfn = strcat(new_fqfn, '.dtseries.nii');
+            end
+
+            % append cdata from all qm_fqfns
+            cifti = mlvg.Lee2024.qm_to_dscalar(qm_fqfns(1), qm_kind=opts.qm_kind, multiplier=opts.multiplier);
+            for fni = 2:length(qm_fqfns)
+                cifti_ = mlvg.Lee2024.qm_to_dscalar( ...
+                    qm_fqfns(fni), qm_kind=opts.qm_kind, multiplier=opts.multiplier);
+                cifti.cdata = [cifti.cdata, cifti_.cdata];
+            end
+
+            % adjust diminfo{2}
+            cifti.diminfo{2} = cifti_diminfo_make_series(size(cifti.cdata, 2), 0, 1, 'SECOND');
+
+            % write
+            if opts.do_write
+                cifti_write(cifti, convertStringsToChars(new_fqfn));
+            end
+        end
+        function cifti = qm_to_dscalar(qm_fqfn, opts)
+            arguments
+                qm_fqfn {mustBeFile}
+                opts.new_fqfn {mustBeTextScalar} = ""
+                opts.qm_kind {mustBeScalarOrEmpty} = 1
+                opts.multiplier single {mustBeScalarOrEmpty} = 1  % for CBF or PS, multiplier ~ 60
+                opts.do_write logical = false
+            end
+            if isemptytext(opts.new_fqfn)
+                opts.new_fqfn = fullfile( ...
+                    myfileparts(qm_fqfn), mybasename(qm_fqfn) + "-kind" + opts.qm_kind + ".dscalar.nii");
+            end
+
+            % qm nifti
+            ifc = mlfourd.ImagingFormatContext2(qm_fqfn);
+            img = ifc.img(:, opts.qm_kind);
+
+            % cifti for supported Schaefer indices
+            schaefer = cifti_read( ...
+                fullfile( ...
+                    getenv("SINGULARITY_HOME"), ...
+                    "CCIR_01211", "derivatives", "sub-108293", "ses-20210218", "Parcellations", ...
+                    "Schaefer164k.dscalar.nii"));
+            schaefer_indices = schaefer.cdata;  % ~ 734132x1 single
+            unique_schaefer_indices = unique(schaefer_indices);
+            unique_schaefer_indices(unique_schaefer_indices == 0) = [];  % remove zero
+
+            % aufbau new cdata1
+            ld = load( ...                
+                fullfile( ...
+                    getenv("SINGULARITY_HOME"), ...
+                    "CCIR_01211", "derivatives", "sub-108293", "ses-20210218", "Parcellations", ...
+                    "indices_all.mat"));
+            indices_all = ld.indices_all;  % no zero
+            cdata1 = zeros(size(schaefer_indices), "single");
+            for i_ = asrow(unique_schaefer_indices)
+                found = indices_all == i_;
+                qm = img(found);  % must be scalar
+                cdata1(i_ == schaefer_indices) = qm;
+            end
+            cdata1 = opts.multiplier * single(cdata1);
+
+            % write
+            cifti = schaefer;
+            cifti.cdata = cdata1;
+            if opts.do_write
+                cifti_write(cifti, convertStringsToChars(opts.new_fqfn));
+            end
         end
         function ic = create_kernel(hct, Nt, opts)
             arguments
@@ -1529,6 +1830,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
         table_idif_nest_
         table_idif_nii_
         table_maframes_nii_
+        table_maframes_timeAppend_nii_
         table_twilite_nest_
         table_twilite_nii_
 
@@ -1610,18 +1912,17 @@ classdef Lee2024 < handle & mlsystem.IHandle
                     error("mlvg:ValueError", "%s: trc=%s not recognized.", stackstr(), trc)
             end
         end
-        function T = strrep_bids_fqfn(this, opts)
+        function T = strrep_bids_fqfn(this, T, opts)
             %% updates this.table_maframes_nii_, replacing arbitrary strings with new strings
 
             arguments
-                this
+                this mlvg.Lee2024
+                T table
                 opts.s1 {mustBeTextScalar} = fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity")
                 opts.s2 {mustBeTextScalar} = fullfile(getenv("SINGULARITY_HOME"))
             end
             
-            T = this.table_maframes_nii;
             T.bids_fqfn = strrep(T.bids_fqfn, opts.s1, opts.s2);
-            this.table_maframes_nii_ = T;
         end
     end
 
@@ -1636,8 +1937,18 @@ classdef Lee2024 < handle & mlsystem.IHandle
             img = cell(size(T, 1), 1);
             for row = 1:size(T, 1)
                 csv = readtable(T.bids_fqfn(row));
-                timesMid{row} = double(asrow(csv.times));
-                img__ = double(asrow(csv.ideal)); 
+                try
+                    timesMid{row} = double(asrow(csv.times));
+                catch ME
+                    handwarning(ME)
+                    timesMid{row} = double(asrow(csv.timesMid));
+                end
+                try
+                    img__ = double(asrow(csv.ideal));
+                catch ME
+                    handwarning(ME)
+                    img__ = double(asrow(csv.img));
+                end
                 if do_rescale
                     inveff__ = T.inveff(row);
                     img{row} = img__ .* inveff__ / 1e3; % kBq/mL    
@@ -1672,6 +1983,20 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 end
             end
             T = addvars(T, imaging, timesMid, img, NewVariableNames={'imaging', 'timesMid', 'img'});
+        end
+        function T = add_peak_position(T)
+            arguments
+                T table
+            end
+
+            pp = nan(size(T, 1), 1);
+            for row = 1:size(T, 1)
+                [~, pp(row)] = max(T.img{row});
+                if pp(row) == length(T.img{row})
+                    pp(row) = 1;
+                end
+            end
+            T = addvars(T, pp, NewVariableNames={'peak_position'});
         end
         function tidx = find_takeoff(img, if_type, trc)
             arguments
@@ -1715,13 +2040,43 @@ classdef Lee2024 < handle & mlsystem.IHandle
             ses = parts(selected);
             dt = datetime(extractBetween(ses, 5, 18), InputFormat="yyyyMMddHHmmss");
         end
+        function N = filename2Nkind(fn)
+            [~,fp] = myfileparts(fn);
+            if contains(fp, "Raichle") || contains(fp, "Mintun")
+                N = 6; return
+            end
+            if contains(fp, "Mintun")
+                N = 7; return
+            end
+            if contains(fp, "Ichise")
+                N = 9; return
+            end
+            error("mlvg:ValueError", stackstr())
+        end
         function trc = filename2tracer(fn)
             arguments
                 fn {mustBeTextScalar}
             end
 
-            re = regexp(fn, "\S+_trc-(?<trc>[a-zA-Z0-9]+)_\S+", "names");
-            trc = re.trc;
+            try
+                re = regexp(fn, "\S+_trc-(?<trc>[a-zA-Z0-9]+)_\S+", "names");
+                trc = re.trc;
+            catch ME
+                handwarning(ME)
+                trc = "unknown";
+            end
+        end
+        function m = infer_multiplier(fqfn, kind)
+            [~,fp] = myfileparts(fqfn);
+            if contains(fp, "Raichle")
+                switch kind
+                    case {1,3}
+                        m = 60; return
+                    otherwise
+                        m = 1; return
+                end
+            end
+            m = 1;
         end
         function T = truncate_ses(T)
             arguments
