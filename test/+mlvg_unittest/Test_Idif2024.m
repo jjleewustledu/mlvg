@@ -20,35 +20,36 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
 
-            nii = idif2024.martinv1(sub="sub-108293");
-            imagesc(nii);
-            nii_idif = idif2024.martinv1();
-            imagesc(nii_idif);
-            nii_median = idif2024.martinv1(stats="median");
-            imagesc(nii_median);
-            nii_iqr = idif2024.martinv1(stats="iqr");
-            imagesc(nii_iqr);
-            nii_coeffvar = nii_iqr ./ nii_median;
-            imagesc(nii_coeffvar);
+            % nii = idif2024.martinv1(sub="sub-108293");
+            % imagesc(nii);
+            % nii_idif = idif2024.martinv1();
+            % imagesc(nii_idif);
+            % nii_median = idif2024.martinv1(stats="median");
+            % imagesc(nii_median);
+            % nii_iqr = idif2024.martinv1(stats="iqr");
+            % imagesc(nii_iqr);
+            % nii_coeffvar = nii_iqr ./ nii_median;
+            % imagesc(nii_coeffvar);
 
             cii_idif = idif2024.martinv1(stats="median", input_func="idif", typeclass="cifti");
             disp(cii_idif)
-            %cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
+            % cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
             cii_twil = idif2024.martinv1(stats="median", input_func="twilite", typeclass="cifti");
             disp(cii_twil)
-            %cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
+            % cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
-            cii_didif = cii_idif;
-            cii_didif.cdata = cii_idif.cdata - cii_twil.cdata;
-            cii_didif.fqfn = strrep(cii_didif.fqfn, "idif", "didif");
-            disp(cii_didif)
-            %cifti_write(cii_didif, convertStringsToChars(cii_didif.fqfn))
+            cii_baresid = cii_idif;
+            unbiased_est = 0.5*(cii_idif.cdata + cii_twil.cdata);
+            cii_baresid.cdata = (cii_idif.cdata - cii_twil.cdata) ./ unbiased_est;
+            cii_baresid.fqfn = strrep(cii_baresid.fqfn, "idif", "baresid");
+            disp(cii_baresid)
+            cifti_write(cii_baresid, convertStringsToChars(cii_baresid.fqfn))
 
             % write & view all subjects
-            %cii = idif2024.martinv1(typeclass="cifti");
-            %cifti_write(cii, convertStringsToChars(stackstr() + ".dtseries.nii"))
-            %mysystem("wb_view")
+            % cii = idif2024.martinv1(typeclass="cifti");
+            % cifti_write(cii, convertStringsToChars(stackstr() + ".dtseries.nii"))
+            % mysystem("wb_view")
 
             popd(pwd0);
         end
@@ -56,35 +57,36 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
 
-            nii = idif2024.raichleks(sub="sub-108293");
-            imagesc(nii);
-            nii_idif = idif2024.raichleks();
-            view(nii_idif);
-            nii_median = idif2024.raichleks(stats="median");
-            imagesc(nii_median);
-            nii_iqr = idif2024.raichleks(stats="iqr");
-            imagesc(nii_iqr);
-            nii_coeffvar = nii_iqr ./ nii_median;
-            imagesc(nii_coeffvar);
+            % nii = idif2024.raichleks(sub="sub-108293");
+            % imagesc(nii);
+            % nii_idif = idif2024.raichleks();
+            % view(nii_idif);
+            % nii_median = idif2024.raichleks(stats="median");
+            % imagesc(nii_median);
+            % nii_iqr = idif2024.raichleks(stats="iqr");
+            % imagesc(nii_iqr);
+            % nii_coeffvar = nii_iqr ./ nii_median;
+            % imagesc(nii_coeffvar);
 
             cii_idif = idif2024.raichleks(stats="median", input_func="idif", typeclass="cifti");
             disp(cii_idif)
-            %cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
+            % cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
             cii_twil = idif2024.raichleks(stats="median", input_func="twilite", typeclass="cifti");
             disp(cii_twil)
-            %cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
+            % cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
-            cii_didif = cii_idif;
-            cii_didif.cdata = cii_idif.cdata - cii_twil.cdata;
-            cii_didif.fqfn = strrep(cii_didif.fqfn, "idif", "didif");
-            disp(cii_didif)
-            %cifti_write(cii_didif, convertStringsToChars(cii_didif.fqfn))
+            cii_baresid = cii_idif;
+            unbiased_est = 0.5*(cii_idif.cdata + cii_twil.cdata);
+            cii_baresid.cdata = (cii_idif.cdata - cii_twil.cdata) ./ unbiased_est;
+            cii_baresid.fqfn = strrep(cii_baresid.fqfn, "idif", "baresid");
+            disp(cii_baresid)
+            cifti_write(cii_baresid, convertStringsToChars(cii_baresid.fqfn))
 
             % write & view all subjects
-            %cii = idif2024.raichleks(typeclass="cifti");
-            %cifti_write(cii, convertStringsToChars(stackstr() + ".dtseries.nii"))
-            %mysystem("wb_view")
+            % cii = idif2024.raichleks(typeclass="cifti");
+            % cifti_write(cii, convertStringsToChars(stackstr() + ".dtseries.nii"))
+            % mysystem("wb_view")
 
             popd(pwd0);
         end
@@ -92,35 +94,171 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
 
-            nii = idif2024.mintunks(sub="sub-108293");
-            imagesc(nii);
-            nii_idif = idif2024.mintunks();
-            view(nii_idif);
-            nii_median = idif2024.mintunks(stats="median");
-            imagesc(nii_median);
-            nii_iqr = idif2024.mintunks(stats="iqr");
-            imagesc(nii_iqr);
-            nii_coeffvar = nii_iqr ./ nii_median;
-            imagesc(nii_coeffvar);
+            % nii = idif2024.mintunks(sub="sub-108293");
+            % imagesc(nii);
+            % nii_idif = idif2024.mintunks();
+            % view(nii_idif);
+            % nii_median = idif2024.mintunks(stats="median");
+            % imagesc(nii_median);
+            % nii_iqr = idif2024.mintunks(stats="iqr");
+            % imagesc(nii_iqr);
+            % nii_coeffvar = nii_iqr ./ nii_median;
+            % imagesc(nii_coeffvar);
 
             cii_idif = idif2024.mintunks(stats="median", input_func="idif", typeclass="cifti");
             disp(cii_idif)
-            cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
+            % cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
             cii_twil = idif2024.mintunks(stats="median", input_func="twilite", typeclass="cifti");
             disp(cii_twil)
-            cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
+             % cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
-            cii_didif = cii_idif;
-            cii_didif.cdata = cii_idif.cdata - cii_twil.cdata;
-            cii_didif.fqfn = strrep(cii_didif.fqfn, "idif", "didif");
-            disp(cii_didif)
-            cifti_write(cii_didif, convertStringsToChars(cii_didif.fqfn))
+            cii_baresid = cii_idif;
+            unbiased_est = 0.5*(cii_idif.cdata + cii_twil.cdata);
+            cii_baresid.cdata = (cii_idif.cdata - cii_twil.cdata) ./ unbiased_est;
+            cii_baresid.fqfn = strrep(cii_baresid.fqfn, "idif", "baresid");
+            disp(cii_baresid)
+            cifti_write(cii_baresid, convertStringsToChars(cii_baresid.fqfn))
 
             % write & view all subjects
-            %cii = idif2024.mintunks(typeclass="cifti");
-            %cifti_write(cii, convertStringsToChars(stackstr() + ".dtseries.nii"))
-            %mysystem("wb_view")
+            % cii = idif2024.mintunks(typeclass="cifti");
+            % cifti_write(cii, convertStringsToChars(stackstr() + ".dtseries.nii"))
+            % mysystem("wb_view")
+
+            popd(pwd0);
+        end
+        function test_huangks(this)
+            idif2024 = mlvg.Idif2024();
+            pwd0 = pushd(idif2024.derivatives_path);
+
+            % nii = idif2024.huangks(sub="sub-108293");
+            % imagesc(nii);
+            % nii_idif = idif2024.huangks();
+            % view(nii_idif);
+            % nii_median = idif2024.huangks(stats="median");
+            % imagesc(nii_median);
+            % nii_iqr = idif2024.huangks(stats="iqr");
+            % imagesc(nii_iqr);
+            % nii_coeffvar = nii_iqr ./ nii_median;
+            % imagesc(nii_coeffvar);
+
+            cii_idif = idif2024.huangks(stats="median", input_func="idif", typeclass="cifti");
+            disp(cii_idif)
+            % cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
+
+            cii_twil = idif2024.huangks(stats="median", input_func="twilite", typeclass="cifti");
+            disp(cii_twil)
+            % cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
+
+            cii_baresid = cii_idif;
+            unbiased_est = 0.5*(cii_idif.cdata + cii_twil.cdata);
+            cii_baresid.cdata = (cii_idif.cdata - cii_twil.cdata) ./ unbiased_est;
+            cii_baresid.fqfn = strrep(cii_baresid.fqfn, "idif", "baresid");
+            disp(cii_baresid)
+            cifti_write(cii_baresid, convertStringsToChars(cii_baresid.fqfn))
+
+            % write & view all subjects
+            % cii = idif2024.huangks(typeclass="cifti");
+            % cifti_write(cii, convertStringsToChars(stackstr() + ".dtseries.nii"))
+            % mysystem("wb_view")
+
+            popd(pwd0);
+        end
+        function test_cmro2(this)
+            idif2024 = mlvg.Idif2024();
+            pwd0 = pushd(idif2024.derivatives_path);
+
+            % nii = idif2024.cmro2(stats="", input_func="idif", typeclass="nifti");
+            % imagesc(nii);
+            
+            cii_idif = idif2024.cmro2(stats="median", input_func="idif", typeclass="cifti");
+            disp(cii_idif)
+            % cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
+
+            cii_twil = idif2024.cmro2(stats="median", input_func="twilite", typeclass="cifti");
+            disp(cii_twil)
+            % cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
+
+            cii_baresid = cii_idif;
+            unbiased_est = 0.5*(cii_idif.cdata + cii_twil.cdata);
+            cii_baresid.cdata = (cii_idif.cdata - cii_twil.cdata) ./ unbiased_est;
+            cii_baresid.fqfn = strrep(cii_baresid.fqfn, "idif", "baresid");
+            disp(cii_baresid)
+            cifti_write(cii_baresid, convertStringsToChars(cii_baresid.fqfn))
+
+            popd(pwd0);
+        end
+        function test_cmrglc(this)
+            idif2024 = mlvg.Idif2024();
+            pwd0 = pushd(idif2024.derivatives_path);
+
+            nii = idif2024.cmrglc(stats="", input_func="idif", typeclass="nifti");
+            imagesc(nii);
+            
+            cii_idif = idif2024.cmrglc(stats="median", input_func="idif", typeclass="cifti");
+            disp(cii_idif)
+            cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
+
+            cii_twil = idif2024.cmrglc(stats="median", input_func="twilite", typeclass="cifti");
+            disp(cii_twil)
+            cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
+
+            cii_baresid = cii_idif;
+            unbiased_est = 0.5*(cii_idif.cdata + cii_twil.cdata);
+            cii_baresid.cdata = (cii_idif.cdata - cii_twil.cdata) ./ unbiased_est;
+            cii_baresid.fqfn = strrep(cii_baresid.fqfn, "idif", "baresid");
+            disp(cii_baresid)
+            cifti_write(cii_baresid, convertStringsToChars(cii_baresid.fqfn))
+
+            popd(pwd0);
+        end
+        function test_ogi(this)
+            idif2024 = mlvg.Idif2024();
+            pwd0 = pushd(idif2024.derivatives_path);
+
+            nii = idif2024.ogi(input_func="idif", typeclass="nifti");
+            imagesc(nii);
+            
+            cii_idif = idif2024.ogi(input_func="idif", typeclass="cifti");
+            disp(cii_idif)
+            cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
+
+            cii_twil = idif2024.ogi(input_func="twilite", typeclass="cifti");
+            disp(cii_twil)
+            cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
+
+            cii_baresid = cii_idif;
+            unbiased_est = 0.5*(cii_idif.cdata + cii_twil.cdata);
+            cii_baresid.cdata = (cii_idif.cdata - cii_twil.cdata) ./ unbiased_est;
+            cii_baresid.fqfn = strrep(cii_baresid.fqfn, "idif", "baresid");
+            disp(cii_baresid)
+            cifti_write(cii_baresid, convertStringsToChars(cii_baresid.fqfn))
+
+            popd(pwd0);
+        end
+        function test_agi(this)
+            idif2024 = mlvg.Idif2024();
+            pwd0 = pushd(idif2024.derivatives_path);
+
+            nii = idif2024.agi(input_func="idif", typeclass="nifti");
+            imagesc(nii);
+            
+            cii_idif = idif2024.agi(input_func="idif", typeclass="cifti");
+            disp(cii_idif)
+            cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
+
+            cii_twil = idif2024.agi(input_func="twilite", typeclass="cifti");
+            disp(cii_twil)
+            cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
+
+            cii_baresid = cii_idif;
+            unbiased_est = 0.5*(cii_idif.cdata + cii_twil.cdata);
+            cii_baresid.cdata = (cii_idif.cdata - cii_twil.cdata) ./ unbiased_est;
+            cii_baresid.fqfn = strrep(cii_baresid.fqfn, "idif", "baresid");
+            disp(cii_baresid)
+            cifti_write(cii_baresid, convertStringsToChars(cii_baresid.fqfn))
+
+            popd(pwd0);
         end
     end
     
