@@ -16,6 +16,7 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             this.verifyEqual(1,1);
             this.assertEqual(1,1);
         end
+
         function test_martinv1(this)
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
@@ -53,6 +54,7 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
             popd(pwd0);
         end
+
         function test_raichleks(this)
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
@@ -90,6 +92,7 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
             popd(pwd0);
         end
+
         function test_mintunks(this)
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
@@ -127,6 +130,7 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
             popd(pwd0);
         end
+
         function test_huangks(this)
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
@@ -164,6 +168,7 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
             popd(pwd0);
         end
+
         function test_cmro2(this)
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
@@ -188,6 +193,7 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
             popd(pwd0);
         end
+
         function test_cmrglc(this)
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
@@ -212,6 +218,7 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
             popd(pwd0);
         end
+
         function test_ogi(this)
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
@@ -236,6 +243,7 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
             popd(pwd0);
         end
+
         function test_agi(this)
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
@@ -257,6 +265,129 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             cii_baresid.fqfn = strrep(cii_baresid.fqfn, "idif", "baresid");
             disp(cii_baresid)
             cifti_write(cii_baresid, convertStringsToChars(cii_baresid.fqfn))
+
+            popd(pwd0);
+        end
+
+        function test_logz(this)
+            idif2024 = mlvg.Idif2024();
+            pwd0 = pushd(idif2024.derivatives_path);
+
+            %model = "Raichle1983";
+            model = "Mintun1984";
+            %model = "Huang1980";
+            %trc = "trc-ho";
+            trc = "trc-oo";
+            %trc = "trc-fdg";
+
+            nii_idif = idif2024.logz(stats="median", sub="sub-108293", input_func="idif", model=model, trc=trc);
+            disp(nii_idif);
+
+            nii_twil = idif2024.logz(stats="median", sub="sub-108293", input_func="twil", model=model, trc=trc);
+            disp(nii_twil);
+
+            %% median, iqr, coeff. var.
+
+            nii_median = idif2024.logz(stats="median", input_func="idif", model=model, trc=trc);
+            plot(nii_median);
+
+            nii_iqr = idif2024.logz(stats="iqr", input_func="idif", model=model, trc=trc);
+            plot(nii_iqr);
+
+            nii_coeffvar = nii_iqr ./ nii_median;
+            plot(nii_coeffvar);
+
+            %% log(Bayes factor) ~ Dlogz
+
+            nii_bf = nii_idif - nii_twil;
+            plot(nii_bf);
+
+            %% cifti to write
+
+            cii_idif = idif2024.logz(stats="median", input_func="idif", typeclass="cifti", model=model, trc=trc);
+            disp(cii_idif)
+            cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
+
+            cii_twil = idif2024.logz(stats="median", input_func="twilite", typeclass="cifti", model=model, trc=trc);
+            disp(cii_twil)
+            cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
+
+            cii_bf = idif2024.as(nii_bf, "cifti");
+            s = split(cii_idif.fqfn, "_proc-");
+            cii_bf.fqfn = s(1) + "_proc-schaefer-bfactors-median.dscalar.nii";
+            disp(cii_bf)
+            cifti_write(cii_bf, convertStringsToChars(cii_bf.fqfn));
+
+            popd(pwd0);
+        end
+
+        function test_bayes_factors(this)
+            idif2024 = mlvg.Idif2024();
+            pwd0 = pushd(idif2024.derivatives_path);
+
+            model = "Raichle1983"; trc = "trc-ho";
+            %model = "Mintun1984"; trc = "trc-oo";
+            %model = "Huang1980"; trc = "trc-fdg";           
+
+            nii_bf = idif2024.bayes_factors( ...
+                typeclass="nifti", stats="median", sub="sub-108293", model=model, trc=trc);
+            disp(nii_bf);
+            imagesc(nii_bf);
+
+            cii_bf = idif2024.as(nii_bf, "cifti");
+            s = split(cii_bf.fqfn, "_proc-");
+            cii_bf.fqfn = s(1) + "_proc-schaefer-" + model + "-bfactors-median.dscalar.nii";
+            disp(cii_bf)
+            cifti_write(cii_bf, convertStringsToChars(cii_bf.fqfn));
+
+            popd(pwd0);
+        end
+        function test_rm_raincloud(this)
+            idif2024 = mlvg.Idif2024();
+            pwd0 = pushd(idif2024.derivatives_path);
+
+            metrics = [ ...
+                "CBV", ...
+                "CBF", ...
+                "lambda", ...
+                "PS", ...
+                "OEF", ...
+                "vcapillary", ...
+                "fwatermetab", ...
+                "CMRO2", ...
+                "upper_k1", ...
+                "k2", ...
+                "k3", ...
+                "k4", ...
+                "CMRglc", ...
+                "OGI", ...
+                "AGI", ...
+                "logZ_ho", ...
+                "logZ_oo", ...
+                "logZ_fdg"];
+            axis_labels = [...
+                "CBV (mL cm^{-3})", ...
+                "CBF (mL cm^{-3} min^{-1})", ...
+                "\lambda (mL cm^{-3})", ...
+                "PS (mL cm^{-3} min^{-1})", ...
+                "OEF", ...
+                "V_{post,cap}", ...
+                "f_{water}", ...
+                "CMRO2 (mmol L^{-1} min^{-1})", ... 
+                "K_1 (mL cm^{-3} min^{-1})", ...
+                "k_2 (min^{-1})", ...
+                "k_3 (min^{-1})", ...
+                "k_4 (min^{-1})", ...
+                "CMRglc (mmol L^{-1} min^{-1})", ...
+                "OGI", ...
+                "AGI (mmol L^{-1} min^{-1})", ...
+                "log(Z) [^{15}O] H_2O", ...
+                "log(Z) [^{15}O] O_2", ...
+                "log(Z) [^{18}F] FDG"];
+            for idx = 9:numel(metrics)
+                idif2024.rm_raincloud( ...
+                    metric=metrics(idx), axis_label=axis_labels(idx));
+            end
 
             popd(pwd0);
         end
