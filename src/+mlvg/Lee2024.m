@@ -313,13 +313,12 @@ classdef Lee2024 < handle & mlsystem.IHandle
             if matched
                 [~,found] = this.table_twilite_nii(true);
                 T = T(found, :);
-                T = this.add_imaging(T, false);
-
-                %T = this.find_adjusted_timesMid_img(T, "idif");
-                %T = this.apply_adjusted_timesMid_img(T, "idif");
-                this.table_idif_nii_ = T;
             end
+            T = this.add_imaging(T, false);
 
+            %T = this.find_adjusted_timesMid_img(T, "idif");
+            %T = this.apply_adjusted_timesMid_img(T, "idif");
+            this.table_idif_nii_ = T;
         end
         function T = table_maframes_nii(this)
             %% table of moving-average frames (dynamic)
@@ -698,7 +697,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 this.found_ = isfile(T.bids_fqfn);
                 found = this.found_;
                 T = T(found, :);
-                T = this.add_imaging(T, true);     
+                T = this.add_imaging(T, true);
 
                 %T = this.find_adjusted_timesMid_img(T, "twil");
                 %T = this.apply_adjusted_timesMid_img(T, "twil");
@@ -1226,7 +1225,27 @@ classdef Lee2024 < handle & mlsystem.IHandle
             ic1.filepath = strrep(ic1.filepath, "sourcedata", "derivatives");
             ic1.save();
         end
-        
+        function build_plasma_fdg_input_func(this)
+
+            idif_to_glob = "sub-*_ses-*_trc-fdg_proc-MipIdif_idif_dynesty-Boxcar-ideal-embed.nii.gz";
+            twil_to_glob = "sub-*_ses-*_trc-fdg_proc-TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal-embed.nii.gz";
+            for tg = [idif_to_glob, twil_to_glob]
+                mg = mglob(fullfile( ...
+                    getenv("SINGULARITY_HOME"), ...
+                    "CCIR_01211", ...
+                    "derivatives", ...
+                    "sub-*", "ses-*", "pet", tg));
+                for an_mg = mg
+                    ic =  mlfourd.ImagingContext2(an_mg);
+                    fp_ = ic.fileprefix;
+                    ic = mlraichle.RBCPartition.wb2plasma( ...
+                        ic, ...
+                        this.found_hct(an_mg));
+                    ic.fileprefix = strrep(fp_, "-embed", "-plasma");
+                    save(ic);
+                end
+            end
+        end
         function build_qms_as_dtseries(this, filenames_toglob, tags)
             arguments
                 this mlvg.Lee2024
@@ -1256,28 +1275,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                     cifti_write(cifti, convertStringsToChars(fullfile(pth, fp + "_median_2.dscalar.nii")));
                 end
             end
-        end
-       
-        function build_TwiliteKit_nomodel_recalibrated_inputfunc(this)
-            T = this.table_maframes_timeAppend_nii();
-            for row = 1:size(T, 1)
-                fqfn = T.bids_fqfn(row);
-                fqfn = strrep(fqfn, "sourcedata", "derivatives");
-                idx = strfind(fqfn, "_proc-");
-                fqfnc = convertStringsToChars(fqfn);
-                fqfn_twil = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel_inputfunc.nii.gz";
-                fqfn_recal = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel-recalibrated_inputfunc.nii.gz";
-                
-                if ~isfile(fqfn_twil)
-                    continue
-                end
-                disp(fqfn_twil)
-                ic = mlfourd.ImagingContext2(fqfn_twil);
-                ic = ic ./ T.inveff(row);
-                ic.fqfn = fqfn_recal;
-                ic.save()
-            end
-        end
+        end       
         function build_RadialArtery_ideal_recalibrated(this)
             T = this.table_maframes_timeAppend_nii();
             for row = 1:size(T, 1)
@@ -1298,8 +1296,26 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 ic.save()
             end
         end
-
-        
+        function build_TwiliteKit_nomodel_recalibrated_inputfunc(this)
+            T = this.table_maframes_timeAppend_nii();
+            for row = 1:size(T, 1)
+                fqfn = T.bids_fqfn(row);
+                fqfn = strrep(fqfn, "sourcedata", "derivatives");
+                idx = strfind(fqfn, "_proc-");
+                fqfnc = convertStringsToChars(fqfn);
+                fqfn_twil = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel_inputfunc.nii.gz";
+                fqfn_recal = fqfnc(1:idx) + "proc-TwiliteKit-do-make-input-func-nomodel-recalibrated_inputfunc.nii.gz";
+                
+                if ~isfile(fqfn_twil)
+                    continue
+                end
+                disp(fqfn_twil)
+                ic = mlfourd.ImagingContext2(fqfn_twil);
+                ic = ic ./ T.inveff(row);
+                ic.fqfn = fqfn_recal;
+                ic.save()
+            end
+        end        
         
         function build_all_martin_v1(this)
             import mlkinetics.*
@@ -1362,22 +1378,34 @@ classdef Lee2024 < handle & mlsystem.IHandle
             %disp(ic1)
             %ic1.view()
             ic1.filepath = strrep(ic1.filepath, "sourcedata", "derivatives");
-            ic1.save();
+            if ~isfile(ic1.fqfn)
+                ic1.save();
+            end
 
-            ifc2 = ic1.imagingFormat;
-            U_img = smoothdata(U_img);
-            ifc2.img = 1e-3 * ifc2.img ./ U_img;  % kBq/mL -> Bq/mL
-            ifc2.img = mean(ifc2.img(:, 121:end), 2);
-            ifc2.fileprefix = ifc2.fileprefix + "-idif_martinv1";
-            ifc2.save();
+            try
+                ifc2 = ic1.imagingFormat;
+                % U_img = smoothdata(U_img);
+                ifc2.img = 1e-3 * ifc2.img ./ U_img;  % kBq/mL -> Bq/mL
+                ifc2.img = mean(ifc2.img(:, 121:end), 2);
+                ifc2.fileprefix = ifc2.fileprefix + "-idif_martinv1";
+                ifc2.save();
+            catch ME
+                handwarning(ME)
+            end
 
-            ifc3 = ic1.imagingFormat;
-            V_img = smoothdata(V_img);
-            Nt = min(size(ifc3.img, 2), length(V_img));
-            ifc3.img = 1e-3 * ifc3.img(:, 1:Nt) ./ V_img(1:Nt);  % kBq/mL -> Bq/mL
-            ifc3.img = mean(ifc3.img(:, 121:end), 2);
-            ifc3.fileprefix = ifc3.fileprefix + "-twilite_martinv1";
-            ifc3.save();    
+            try
+                ifc3 = ic1.imagingFormat;
+                % V_img = smoothdata(V_img);
+                Nt = min(size(ifc3.img, 2), length(V_img));
+                ifc3.img = 1e-3 * ifc3.img(:, 1:Nt) ./ V_img(1:Nt);  % kBq/mL -> Bq/mL
+                ifc3.img = mean(ifc3.img(:, 121:end), 2);
+                ifc3.fileprefix = ifc3.fileprefix + "-twilite_martinv1";
+                if ~any(isnan(ifc3.img))
+                    ifc3.save();
+                end
+            catch ME
+                handwarning(ME)
+            end
         end
                 
         function build_schaeffer_parc(this, select_tag)
@@ -1487,6 +1515,26 @@ classdef Lee2024 < handle & mlsystem.IHandle
             % plot(ic);
             ic.fileprefix = ic.fileprefix + "-embed";
             % ic.save();
+        end
+        function hct = found_hct(fqfn)
+            [~,fp] = myfileparts(fqfn);
+            re = regexp(fp, "(?<sub>sub-\d{6})_ses-\d+_\S+", "names");
+            switch char(re.sub)
+                case 'sub-108293'
+                    hct = 46.8;
+                case 'sub-108237'
+                    hct = 43.9;
+                case 'sub-108254'
+                    hct = 37.9;
+                case 'sub-108250'
+                    hct = 42.8;
+                case 'sub-108284'
+                    hct = 39.7;
+                case 'sub-108306'
+                    hct = 41.1;
+                otherwise
+                    error("mlvg:ValueError", stackstr());
+            end
         end
         function cifti = qms_to_dtseries(qm_fqfns, new_fqfn, opts)
             arguments

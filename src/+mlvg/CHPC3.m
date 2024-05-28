@@ -47,6 +47,7 @@ classdef CHPC3
             c.AdditionalProperties.MemUsage = '4000'; % in MB
             c.AdditionalProperties.Node = 1;
             c.AdditionalProperties.Partition = 'free';
+            c.AdditionalProperties.AdditionalSubmitArgs = '';
             c.AdditionalProperties.WallTime = '01:00:00';
             c.saveProfile
             disp(c.AdditionalProperties)

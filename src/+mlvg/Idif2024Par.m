@@ -9,7 +9,7 @@ classdef Idif2024Par
     
     methods (Static)
         function j = serial_tiny_test()
-            mlvg.CHPC3.propcluster_free()
+            mlvg.CHPC3.propcluster_tiny()
             
             c = parcluster;
             disp(c.AdditionalProperties)

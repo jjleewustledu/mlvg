@@ -9,7 +9,9 @@ classdef Idif2024 < handle & mlsystem.IHandle
     
 
     properties (Constant)
+        USE_KLUDGE = false
         LC = 0.81  % lumped constant
+        MAIN_TAG = "main7-rc1p85-vrc1-3000"
         RECOVERY_COEFFICIENT = 1.8509  % determined from CO for Biograph Vision 600
         TIME_APPEND_SUFFIXES = ["_timeAppend-165", "_timeAppend-80", "_timeAppend-4", ""]
     end
@@ -68,7 +70,87 @@ classdef Idif2024 < handle & mlsystem.IHandle
 
         %% visualizations
 
-        function [f,h] = rm_raincloud(this, opts)
+        function build_all_rm_rainclouds(this)
+
+            pwd0 = pushd(this.derivatives_path);
+
+            metrics = [ ...
+                "CBV", ...
+                "CBF", ...
+                "lambda", ...
+                "PS", ...
+                "OEF", ...
+                "fwatermetab", ...
+                "vcapillary", ...
+                "CMRO2", ...
+                "upper_k1", ...
+                "k2", ...
+                "k3", ...
+                "k4", ...
+                "CMRglc", ...
+                "OGI", ...
+                "AGI", ...
+                "logZ_ho", ...
+                "logZ_oo", ...
+                "logZ_fdg"];
+            axis_labels = [...
+                "CBV (mL cm^{-3})", ...
+                "CBF (mL cm^{-3} min^{-1})", ...
+                "\lambda (mL cm^{-3})", ...
+                "PS (mL cm^{-3} min^{-1})", ...
+                "OEF", ...
+                "f_{water}", ...
+                "V_{post,cap}", ...
+                "CMRO2 (mmol L^{-1} min^{-1})", ... 
+                "K_1 (mL cm^{-3} min^{-1})", ...
+                "k_2 (min^{-1})", ...
+                "k_3 (min^{-1})", ...
+                "k_4 (min^{-1})", ...
+                "CMRglc (mmol L^{-1} min^{-1})", ...
+                "OGI", ...
+                "AGI (mmol L^{-1} min^{-1})", ...
+                "log(Z) [^{15}O] H_2O", ...
+                "log(Z) [^{15}O] O_2", ...
+                "log(Z) [^{18}F] FDG"];
+            for idx = 1:numel(metrics)
+                this.build_rm_raincloud( ...
+                    metric=metrics(idx), axis_label=axis_labels(idx));
+            end
+
+            popd(pwd0);
+        end
+
+        function build_fdg_rm_rainclouds(this)
+
+            pwd0 = pushd(this.derivatives_path);
+
+            metrics = [ ...
+                "upper_k1", ...
+                "k2", ...
+                "k3", ...
+                "k4", ...
+                "CMRglc", ...
+                "OGI", ...
+                "AGI", ...
+                "logZ_fdg"];
+            axis_labels = [ ...
+                "K_1 (mL cm^{-3} min^{-1})", ...
+                "k_2 (min^{-1})", ...
+                "k_3 (min^{-1})", ...
+                "k_4 (min^{-1})", ...
+                "CMRglc (mmol L^{-1} min^{-1})", ...
+                "OGI", ...
+                "AGI (mmol L^{-1} min^{-1})", ...
+                "log(Z) [^{18}F] FDG"];
+            for idx = 1:numel(metrics)
+                this.build_rm_raincloud( ...
+                    metric=metrics(idx), axis_label=axis_labels(idx));
+            end
+
+            popd(pwd0);
+        end
+
+        function [f,h] = build_rm_raincloud(this, opts)
             arguments
                 this mlvg.Idif2024 
                 opts.metric {mustBeTextScalar} = "CMRglc"
@@ -126,7 +208,11 @@ classdef Idif2024 < handle & mlsystem.IHandle
             h = rm_raincloud(data, cl);
             %set(gca, 'YLim', [-0.3 1.6]);
             xlabel(opts.axis_label);
-            ylabel("Participants");
+            if contains(opts.metric, ["OEF", "vcapillary", "fwatermetab", "CMRO2", "logZ_oo"])
+                ylabel("Scans from 6 Participants");
+            else
+                ylabel("Participants");
+            end
             fontsize(scale=2.5)
             saveFigure2(f_metric, fullfile(pwd, lower(opts.metric) + "_raincloud"));
 
@@ -142,7 +228,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [ic,mg] = this.martinv1(input_func=opts.input_func, typeclass="nifti", stats=opts.stats);
@@ -160,7 +246,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [ic,mg] = this.raichleks( ...
@@ -178,7 +264,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [ic,mg] = this.raichleks( ...
@@ -195,7 +281,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [ic,mg] = this.raichleks( ...
@@ -213,30 +299,29 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [ic,mg] = this.mintunks( ...
                 idx_metric=1, ...
                 input_func=opts.input_func, typeclass="nifti", stats=opts.stats);
-            ic.fileprefix = strrep(ic.fileprefix, "mintunks", "oef");
-            obj = this.as(ic, opts.typeclass);
-        end
 
-        function [obj,mg] = vcapillary(this, opts)
-            %% r"$v_{post} + 0.5 v_{cap}$", mL/mL
+            %% KLUDGE for collinear OEF & vcapillary ======================================
+            if this.USE_KLUDGE
+                ic3 = this.mintunks( ...
+                    idx_metric=3, ...
+                    input_func=opts.input_func, typeclass="nifti", stats=opts.stats);
 
-            arguments
-                this mlvg.Idif2024
-                opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
-                opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                ifc = ic.imagingFormat;
+                img = ifc.img .* ic3.imagingFormat.img;
+                R = 0.835;
+                kludge = 1 - R*(1 - img);
+                ifc.img = kludge;
+                ic = mlfourd.ImagingContext2(ifc);
             end
+            %% ============================================================================
 
-            [ic,mg] = this.mintunks( ...
-                idx_metric=2, ...
-                input_func=opts.input_func, typeclass="nifti", stats=opts.stats);
-            ic.fileprefix = strrep(ic.fileprefix, "mintunks", "vcapillary");
+            ic.fileprefix = strrep(ic.fileprefix, "mintunks", "oef");
             obj = this.as(ic, opts.typeclass);
         end
 
@@ -247,13 +332,30 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
+            end
+
+            [ic,mg] = this.mintunks( ...
+                idx_metric=2, ...
+                input_func=opts.input_func, typeclass="nifti", stats=opts.stats);
+            ic.fileprefix = strrep(ic.fileprefix, "mintunks", "fwatermetab");
+            obj = this.as(ic, opts.typeclass);
+        end
+
+        function [obj,mg] = vcapillary(this, opts)
+            %% r"$v_{post} + 0.5 v_{cap}$", mL/mL
+
+            arguments
+                this mlvg.Idif2024
+                opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
+                opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [ic,mg] = this.mintunks( ...
                 idx_metric=3, ...
                 input_func=opts.input_func, typeclass="nifti", stats=opts.stats);
-            ic.fileprefix = strrep(ic.fileprefix, "mintunks", "fwatermetab");
+            ic.fileprefix = strrep(ic.fileprefix, "mintunks", "vcapillary");
             obj = this.as(ic, opts.typeclass);
         end
 
@@ -265,7 +367,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             % for each available ic_mintunks:
@@ -280,14 +382,23 @@ classdef Idif2024 < handle & mlsystem.IHandle
             for idx_mg = 1:numel(mg)
                 asub = this.parse_fileprefix(mg(idx_mg));
                 ic_raichleks = this.raichleks( ...
-                    sub=asub, ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="median");
+                    sub=asub, ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="mean");
                 if isempty(ic_raichleks)
                     ic_raichleks = this.raichleks( ...
-                        sub="sub-*", ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="median");
+                        sub="sub-*", ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="mean");
                 end                
                 ifc_cmro2.img(:,idx_mg) = ...
                     ifc_mintunks.img(:,1,idx_mg) .* ic_raichleks.imagingFormat.img(:,1) .* ...
                     60 * 44.64 * this.o2_content(asub);  % mmol / L / min
+
+                %% KLUDGE for collinear OEF & vcapillary ========================================
+                if this.USE_KLUDGE
+                    R = 0.835;
+                    kludge = 1 - R*(1 - ifc_cmro2.img(:,idx_mg) .* ifc_mintunks.img(:,3,idx_mg));
+                    ifc_cmro2.img(:,idx_mg) = kludge;
+                end
+                %% ===============================================================================
+
             end
 
             % apply opts.stats to img if img represents multiple mg;
@@ -313,7 +424,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             % for each available ic_mintunks:
@@ -328,10 +439,10 @@ classdef Idif2024 < handle & mlsystem.IHandle
             for idx_mg = 1:numel(mg)
                 asub = this.parse_fileprefix(mg(idx_mg));
                 ic_martinv1 = this.martinv1( ...
-                    sub=asub, ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="median");
+                    sub=asub, ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="mean");
                 if isempty(ic_martinv1)
                     ic_martinv1 = this.martinv1( ...
-                        sub="sub-*", ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="median");
+                        sub="sub-*", ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="mean");
                 end 
                 k1 = ifc_huangks.img(:,1,idx_mg);
                 ifc_K1.img(:,idx_mg) = ...
@@ -355,7 +466,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [obj,mg] = this.kss( ...
@@ -368,7 +479,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [obj,mg] = this.kss( ...
@@ -381,7 +492,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [obj,mg] = this.kss(  ...
@@ -396,7 +507,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
                 opts.idx_metric double = 2
             end
 
@@ -429,7 +540,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             % for each available ic_mintunks:
@@ -444,10 +555,10 @@ classdef Idif2024 < handle & mlsystem.IHandle
             for idx_mg = 1:numel(mg)
                 asub = this.parse_fileprefix(mg(idx_mg));
                 ic_martinv1 = this.martinv1( ...
-                    sub=asub, ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="median");
+                    sub=asub, ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="mean");
                 if isempty(ic_martinv1)
                     ic_martinv1 = this.martinv1( ...
-                        sub="sub-*", ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="median");
+                        sub="sub-*", ses="ses-*", input_func=opts.input_func, typeclass="nifti", stats="mean");
                 end 
                 k1 = ifc_huangks.img(:,1,idx_mg);
                 k2 = ifc_huangks.img(:,2,idx_mg);
@@ -476,7 +587,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [ic_cmro2,mg_cmro2] = this.cmro2(stats="", input_func=opts.input_func, typeclass="nifti");
@@ -515,7 +626,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 this mlvg.Idif2024
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = "median"  % "median", "mean", "iqr", "std"
+                opts.stats {mustBeTextScalar} = "mean"  % "median", "mean", "iqr", "std"
             end
 
             [ic_cmro2,mg_cmro2] = this.cmro2(stats="", input_func=opts.input_func, typeclass="nifti");
@@ -639,15 +750,17 @@ classdef Idif2024 < handle & mlsystem.IHandle
             [obj,mg] = this.modelks( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
                 model=opts.model, trc=opts.trc, fhandle=@this.raichleks, fname="raichleks");
-            ifc = obj.imagingFormat;
-            if ~isempty(opts.idx_metric)
-                if isemptytext(opts.stats)
-                    ifc.img = ifc.img(:, opts.idx_metric, :);
-                else
-                    ifc.img = ifc.img(:, opts.idx_metric);
+            if isa(obj, "mlfourd.ImagingContext2")
+                ifc = obj.imagingFormat;
+                if ~isempty(opts.idx_metric)
+                    if isemptytext(opts.stats)
+                        ifc.img = ifc.img(:, opts.idx_metric, :);
+                    else
+                        ifc.img = ifc.img(:, opts.idx_metric);
+                    end
                 end
+                obj = mlfourd.ImagingContext2(ifc);
             end
-            obj = mlfourd.ImagingContext2(ifc);
         end
 
         function [obj,mg] = mintunks(this, opts)
@@ -665,15 +778,17 @@ classdef Idif2024 < handle & mlsystem.IHandle
             [obj,mg] = this.modelks( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
                 model=opts.model, trc=opts.trc, fhandle=@this.mintunks, fname="mintunks");
-            ifc = obj.imagingFormat;
-            if ~isempty(opts.idx_metric)
-                if isemptytext(opts.stats)
-                    ifc.img = ifc.img(:, opts.idx_metric, :);
-                else
-                    ifc.img = ifc.img(:, opts.idx_metric);
+            if isa(obj, "mlfourd.ImagingContext2")
+                ifc = obj.imagingFormat;
+                if ~isempty(opts.idx_metric)
+                    if isemptytext(opts.stats)
+                        ifc.img = ifc.img(:, opts.idx_metric, :);
+                    else
+                        ifc.img = ifc.img(:, opts.idx_metric);
+                    end
                 end
+                obj = mlfourd.ImagingContext2(ifc);
             end
-            obj = mlfourd.ImagingContext2(ifc);
         end
         
         function [obj,mg] = huangks(this, opts)
@@ -691,15 +806,17 @@ classdef Idif2024 < handle & mlsystem.IHandle
             [obj,mg] = this.modelks( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
                 model=opts.model, trc=opts.trc, fhandle=@this.huangks, fname="huangks");
-            ifc = obj.imagingFormat;
-            if ~isempty(opts.idx_metric)
-                if isemptytext(opts.stats)
-                    ifc.img = ifc.img(:, opts.idx_metric, :);
-                else
-                    ifc.img = ifc.img(:, opts.idx_metric);
+            if isa(obj, "mlfourd.ImagingContext2")
+                ifc = obj.imagingFormat;
+                if ~isempty(opts.idx_metric)
+                    if isemptytext(opts.stats)
+                        ifc.img = ifc.img(:, opts.idx_metric, :);
+                    else
+                        ifc.img = ifc.img(:, opts.idx_metric);
+                    end
                 end
+                obj = mlfourd.ImagingContext2(ifc);
             end
-            obj = mlfourd.ImagingContext2(ifc);
         end
         
         function [obj,mg] = ichiseks(this)
@@ -1015,6 +1132,22 @@ classdef Idif2024 < handle & mlsystem.IHandle
             ses = re.ses;
             trc = re.trc;
         end
+
+        function s = natsort_filenames(s)
+            arguments 
+                s {mustBeText}
+            end
+            
+            s = convertCharsToStrings(s);
+            for idx = 1:numel(s)
+                [~,ses(idx)] = mlvg.Idif2024.parse_fileprefix(mybasename(s(idx))); %#ok<AGROW>
+            end
+            T = table(ascol(s), ascol(ses), VariableNames=["filenames", "ses"]);
+            T = natsortrows(T, [], 2);
+            if isrow(s)
+                s = asrow(T.filenames);
+            end
+        end
     end
 
     %% PRIVATE
@@ -1043,6 +1176,11 @@ classdef Idif2024 < handle & mlsystem.IHandle
             if ndims(ifc_idif) == 4
                 ifc_idif.img = ifc_idif.img(:,:,:,matching);
             end
+
+            %% KLUDGE ========
+            if this.USE_KLUDGE
+            end
+            %% ===============
         end
 
         function [obj,mg] = modelks(this, opts)
@@ -1060,6 +1198,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 opts.fhandle function_handle
                 opts.fname {mustBeTextScalar}  % corresponding to opts.fhandle, e.g., "raichleks", "logz", ...
                 opts.metric {mustBeTextScalar} = "qm"  % "qm", "logz", "information", "residual"
+                opts.main_tag {mustBeTextScalar} = mlvg.Idif2024.MAIN_TAG
             end
             if contains(opts.input_func, "boxcar")
                 opts.input_func = "idif";
@@ -1067,12 +1206,15 @@ classdef Idif2024 < handle & mlsystem.IHandle
             if contains(opts.input_func, "twil")
                 opts.input_func = "twilite";
             end
+            if strcmp(opts.trc, "trc-fdg")  %% TEMP WORK-AROUND
+                opts.main_tag = "main6-rc1p85-1000";
+            end
 
             % metric
             if strcmp(opts.input_func, "idif")
-                metric = opts.model + "Boxcar-main6-rc1p851000-" + opts.metric;
+                metric = opts.model + "Boxcar-" + opts.main_tag + "-" + opts.metric;
             elseif strcmp(opts.input_func, "twilite")
-                metric = opts.model + "Artery-main6-rc1p851000-" + opts.metric;
+                metric = opts.model + "Artery-" + opts.main_tag + "-" + opts.metric;
             else
                 error("mlvg:ValueError", stackstr())
             end
@@ -1084,6 +1226,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                     fullfile( ...
                         this.derivatives_path, opts.sub, opts.ses, "pet", ...
                         sprintf("*-%s.nii.gz", metric)));
+                mg = this.natsort_filenames(mg);
                 if isemptytext(mg)
                     obj = [];
                     mg = [];
