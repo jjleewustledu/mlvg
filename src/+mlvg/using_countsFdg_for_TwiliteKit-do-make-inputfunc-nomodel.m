@@ -327,7 +327,7 @@ nmfh.build_argmax_maps
 nmfh = mladni.NMFHierarchies
 nmfh.build_argmax_maps
 T
-load('/Volumes/PrecunealSSD/Singularity/ADNI/NMF_FDG/baseline_cn/NumBases24/components/NMFCovariates_table_covariates_1stscan_longitudinal.mat')
+load('/Volumes/PrecunealSSD/Singularity/ADNI/NMF_FDG/baseline_cn/NumBases24/components/NMFCovariates_table_cn_1stscan_longitudinal.mat')
 t
 nmfr = mladni.NMFRadar
 nmfr.table_patt_weighted_fdg
