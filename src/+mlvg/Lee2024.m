@@ -1190,10 +1190,14 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 this.build_maframes_timeAppend_parc(petFqfn);
             end
         end
-        function build_maframes_timeAppend_parc(this, petFqfn)
+        function build_maframes_timeAppend_parc(this, petFqfn, opts)
             arguments
                 this mlvg.Lee2024
                 petFqfn {mustBeFile}
+                opts.tag string = ""
+            end
+            if ~isemptytext(opts.tag) && ~startsWith(opts.tag, "-")
+                opts.tag = "-" + opts.tag;
             end
 
             import mlkinetics.*
@@ -1223,6 +1227,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
             %ic1.view()
             %ic1.view()
             ic1.filepath = strrep(ic1.filepath, "sourcedata", "derivatives");
+            ic1.fileprefix = ic1.fileprefix + opts.tag;
             ic1.save();
         end
         function build_plasma_fdg_input_func(this)
