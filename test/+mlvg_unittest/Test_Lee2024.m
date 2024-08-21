@@ -24,6 +24,40 @@ classdef Test_Lee2024 < matlab.unittest.TestCase
         end
         function test_build_maframes_timeAppend_parc(this)
             %% build schaeffer representations for all the CO dynamic data, all frame window lengths
+            %  assumes filesystem has canonical pet folder with tau-tags in filenames, compatible with BidsKit &
+            %  ImagingMediator.schaeffer_ic
+
+            lee2024 = this.testObj;
+
+            taus = [10,5,3];
+            parfor tidx = 1:length(taus)
+                globbed = asrow(glob(sprintf( ...
+                    '/home/usr/jjlee/mnt/Singularity/CCIR_01211/sourcedata/sub-*/ses-*/pet/sub-*_ses-*_trc-co*-tau%i-createNiftiMovingAvgFrames.nii.gz', taus(tidx))));
+                for gidx = 1:length(globbed)
+                    try
+                        % pwd0 = pushd(fileparts(fileparts(fileparts(g{1}))));  % sub-*/ses-*/                        
+                        lee2024.build_maframes_timeAppend_parc(globbed{gidx}); %#ok<PFBNS>
+                        % popd(pwd0);
+                    catch ME
+                        handwarning(ME)
+                    end
+                end
+            end
+        end
+        function test_build_maframes_timeAppend_parc_sub108237(this)
+            %% build schaeffer representations for sub-108237 only; unit test
+
+            pth = "/home/usr/jjlee/mnt/Singularity/CCIR_01211/sourcedata/sub-108237/ses-20221031100910/pet";
+            fn = "sub-108237_ses-20221031100910_trc-co_proc-delay0-BrainMoCo2-tau10-createNiftiMovingAvgFrames.nii.gz";
+            fqfn = fullfile(pth, fn);
+
+            ic = this.testObj.build_maframes_timeAppend_parc(fqfn);
+            ic.view();
+        end
+        function test_build_maframes_timeAppend_parc_ori(this)
+            %% build schaeffer representations for all the CO dynamic data, all frame window lengths
+            %  reorganize filesystem that has folder tau=*s, which are incompatible with BidsKit &
+            %  ImagingMediator.schaeffer_ic
 
             for tau = [10,5,3]
                 globbed = asrow(glob(sprintf( ...

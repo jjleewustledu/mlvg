@@ -1190,7 +1190,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 this.build_maframes_timeAppend_parc(petFqfn);
             end
         end
-        function build_maframes_timeAppend_parc(this, petFqfn, opts)
+        function ic1 = build_maframes_timeAppend_parc(this, petFqfn, opts)
             arguments
                 this mlvg.Lee2024
                 petFqfn {mustBeFile}
@@ -1204,11 +1204,16 @@ classdef Lee2024 < handle & mlsystem.IHandle
 
             petMed = mlvg.Ccir1211Mediator.create(petFqfn);
 
+            omat = fullfile(petMed.derivPetPath, "T1w_on_" + petMed.imagingReference.fileprefix + ".mat");
+            omat_no_tag = this.remove_tau_tag(omat);
+            if ~isfile(omat) && isfile(omat_no_tag)
+                omat = omat_no_tag;
+            end
             flirt = mlfsl.Flirt( ...
                 'in', petMed.schaeffer_ic, ...
                 'ref', petMed.imagingReference, ...
                 'out', strcat(petMed.fqfp, "-schaeffer.nii.gz"), ...
-                'omat', fullfile(petMed.derivPetPath, "T1w_on_" + petMed.imagingReference.fileprefix + ".mat"), ...
+                'omat', omat, ...
                 'bins', 1024, ...
                 'interp', 'nearestneighbour', ...
                 'noclobber', false);
@@ -1863,6 +1868,10 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 nii.fqfp = myfileprefix(fn);
                 nii.save();
             end
+        end
+        function s = remove_tau_tag(s)
+            re = regexp(s, "\S+(?<ttag>\-tau\d+)\-\S+", "names");
+            s = strrep(s, re.ttag, "");
         end
         function rename_nii(fp, fp1, trc)
             fp = myfileprefix(fp);
