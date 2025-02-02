@@ -17,6 +17,22 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             this.assertEqual(1,1);
         end
 
+        function test_quotient(this)
+            cd("/Volumes/PrecunealSSD/Singularity/CCIR_01211/derivatives")
+            %fn_idif = "sub-all_ses-all_trc-ho_proc-schaefer-idif-raichleks-median.dtseries.nii";
+            %fn_aif = "sub-all_ses-all_trc-ho_proc-schaefer-twilite-raichleks-median.dtseries.nii";
+            %fn_idif = "sub-all_ses-all_trc-oo_proc-schaefer-idif-mintunks-median.dtseries.nii";
+            %fn_aif = "sub-all_ses-all_trc-oo_proc-schaefer-twilite-mintunks-median.dtseries.nii";
+            fn_idif = "sub-all_ses-all_trc-oo_proc-schaefer-idif-cmro2-median.dscalar.nii";
+            fn_aif = "sub-all_ses-all_trc-oo_proc-schaefer-twilite-cmro2-median.dscalar.nii";
+            c_idif = cifti_read(char(fn_idif));
+            c_aif = cifti_read(char(fn_aif));
+            c = c_idif;
+            c.cdata = c_idif.cdata ./ c_aif.cdata;
+            c.cdata(isnan(c.cdata)) = 0;
+            cifti_write(c, char(strrep(fn_idif, "idif", "idif-over-aif")))
+        end
+
         function test_martinv1(this)
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
@@ -271,33 +287,36 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
         function test_logz(this)
 
-            return
+            % return
 
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
 
-            model = "Raichle1983";
-            %model = "Mintun1984";
+            %model = "Raichle1983";
+            model = "Mintun1984";
             %model = "Huang1980";
-            trc = "trc-ho";
-            %trc = "trc-oo";
+            %trc = "trc-ho";
+            trc = "trc-oo";
             %trc = "trc-fdg";
+            sub = "sub-*";
+            centrality = "median";
+            deviation = "iqr";
 
-            nii_idif = idif2024.logz(stats="mean", sub="sub-108293", input_func="idif", model=model, trc=trc);
+            nii_idif = idif2024.logz(stats=centrality, sub=sub, input_func="idif", model=model, trc=trc);
             disp(nii_idif);
 
-            nii_twil = idif2024.logz(stats="mean", sub="sub-108293", input_func="twil", model=model, trc=trc);
+            nii_twil = idif2024.logz(stats=centrality, sub=sub, input_func="twil", model=model, trc=trc);
             disp(nii_twil);
 
             %% median, iqr, coeff. var.
 
-            nii_mean = idif2024.logz(stats="mean", input_func="idif", model=model, trc=trc);
-            plot(nii_mean);
+            nii_centrality = idif2024.logz(stats=centrality, input_func="idif", model=model, trc=trc);
+            plot(nii_centrality);
 
-            nii_iqr = idif2024.logz(stats="iqr", input_func="idif", model=model, trc=trc);
-            plot(nii_iqr);
+            nii_deviation = idif2024.logz(stats=deviation, input_func="idif", model=model, trc=trc);
+            plot(nii_deviation);
 
-            nii_coeffvar = nii_iqr ./ nii_mean;
+            nii_coeffvar = nii_deviation ./ nii_centrality;
             plot(nii_coeffvar);
 
             %% log(Bayes factor) ~ Dlogz
@@ -307,17 +326,17 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
             %% cifti to write
 
-            cii_idif = idif2024.logz(stats="mean", input_func="idif", typeclass="cifti", model=model, trc=trc);
+            cii_idif = idif2024.logz(stats=centrality, input_func="idif", typeclass="cifti", model=model, trc=trc);
             disp(cii_idif)
             cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
-            cii_twil = idif2024.logz(stats="mean", input_func="twilite", typeclass="cifti", model=model, trc=trc);
+            cii_twil = idif2024.logz(stats=centrality, input_func="twilite", typeclass="cifti", model=model, trc=trc);
             disp(cii_twil)
             cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
             cii_bf = idif2024.as(nii_bf, "cifti");
             s = split(cii_idif.fqfn, "_proc-");
-            cii_bf.fqfn = s(1) + "_proc-schaefer-bfactors-mean.dscalar.nii";
+            cii_bf.fqfn = s(1) + "_proc-schaefer-bfactors-" + centrality + ".dscalar.nii";
             disp(cii_bf)
             cifti_write(cii_bf, convertStringsToChars(cii_bf.fqfn));
 
@@ -332,8 +351,8 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             pwd0 = pushd(idif2024.derivatives_path);
 
             %model = "Raichle1983"; trc = "trc-ho";
-            %model = "Mintun1984"; trc = "trc-oo";
-            model = "Huang1980"; trc = "trc-fdg";           
+            model = "Mintun1984"; trc = "trc-oo";
+            %model = "Huang1980"; trc = "trc-fdg";           
 
             nii_bf = idif2024.bayes_factors( ...
                 typeclass="nifti", stats="mean", sub="sub-108293", model=model, trc=trc);

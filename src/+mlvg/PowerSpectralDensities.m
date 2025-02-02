@@ -1,6 +1,5 @@
 classdef PowerSpectralDensities < handle & mlsystem.IHandle
-    %% line1
-    %  line2
+    %% Explores CO PET and correspondences with BOLD
     %  
     %  Created 10-Jul-2024 12:35:46 by jjlee in repository /Users/jjlee/MATLAB-Drive/mlvg/src/+mlvg.
     %  Developed on Matlab 24.1.0.2628055 (R2024a) Update 4 for MACA64.  Copyright 2024 John J. Lee.

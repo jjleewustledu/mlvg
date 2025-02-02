@@ -1134,6 +1134,8 @@ classdef Idif2024 < handle & mlsystem.IHandle
         end
 
         function s = natsort_filenames(s)
+            %% sorts fqfn to be in chronological order as specified by ses folder name
+            
             arguments 
                 s {mustBeText}
             end

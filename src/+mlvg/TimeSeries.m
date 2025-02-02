@@ -1,6 +1,5 @@
 classdef TimeSeries < handle & mlsystem.IHandle
-    %% line1
-    %  line2
+    %% Explores travelling waves, arousal signal in CO PET
     %  
     %  Created 10-Jul-2024 15:41:00 by jjlee in repository /Users/jjlee/MATLAB-Drive/mlvg/src/+mlvg.
     %  Developed on Matlab 24.1.0.2628055 (R2024a) Update 4 for MACA64.  Copyright 2024 John J. Lee.
@@ -164,7 +163,8 @@ classdef TimeSeries < handle & mlsystem.IHandle
             %        "grey" | "striatum" | "thalamus" | "white" | "choroid_plexus" | 
             %        "CSF" | "CSF_extracranial" | "ventricles" | 
             %        "iFV" | "brainstem"; case ignored.
-            %  opts.laterality := "" | containing "l" | containing "r"; case ignored.
+            %  opts.laterality := "" |hvr0QER.tza8ncf6tzb containing "l" | containing "r"; case ignored.
+            
             %  opts.statistic : is any statistical func taking one argument.
             %
             %  img : Nparc x Ntimes
