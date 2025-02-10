@@ -1108,6 +1108,16 @@ classdef Lee2024 < handle & mlsystem.IHandle
             ifc_rc.save();
         end
         function [ifc_rc, ifc_idif, ifc_twil] = build_recovery_coeff2_fdg(~, U, V)
+            %% Specifically manage FDG.  
+            %  Args:
+            %    U (table): information re. IDIFs.
+            %               Measurements must be decay-corrected.
+            %    V (table): information re. AIFs
+            %               Measurements must be decaying, viz., decay corrections take
+            %               counting measurements to time of arterial sampling
+            %  Returns:
+            %    mlfourd.ImagingFormatContext2: recovery coefficients
+
 
             halflife = 1.82951 * 3600;  % sec
             U_ic = mlfourd.ImagingContext2(myfileprefix(U.bids_fqfn{1}) + "-embed.nii.gz");
@@ -1236,6 +1246,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
             ic1.save();
         end
         function build_plasma_fdg_input_func(this)
+            %% applies mlraichle.RBCPartition.wb2plasma() for plasma corrections needed by FDG
 
             idif_to_glob = "sub-*_ses-*_trc-fdg_proc-MipIdif_idif_dynesty-Boxcar-ideal-embed.nii.gz";
             twil_to_glob = "sub-*_ses-*_trc-fdg_proc-TwiliteKit-do-make-input-func-nomodel_inputfunc_dynesty-RadialArtery-ideal-embed.nii.gz";
@@ -1690,7 +1701,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 ifc = nomodel_ic.imagingFormat;                
 
                 img = ifc.img;
-                %img = img .* 2.^(asrow(ifc.json_metadata.timesMid) / halflife);  % decay-correct
+                %img = img .* 2.^(asrow(ifc.json_metadata.timesMid) / halflife);  % decay-corrected to draw time
                 img = [img(1:470), T.activity'];
                 ifc.img = img;
 
@@ -1710,7 +1721,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 %% build tables
 
                 t_drawn2 = rm.countsFdgVenous.TIMEDRAWN_Hh_mm_ss;
-                activity2 = rm.countsFdgVenous.DECAYCorrSpecificActivity_KBq_mL;  % decay-corrected
+                activity2 = rm.countsFdgVenous.DECAYCorrSpecificActivity_KBq_mL;  % decay-corrected to draw time
                 t_elapsed2 = seconds(t_drawn2 - datetime(2022,10,31,12,8,4)) + 17;
                 T2 = table(t_drawn2, t_elapsed2, activity2);
 
@@ -1733,7 +1744,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 ifc = nomodel_ic.imagingFormat;
 
                 img = ifc.img;
-                %img = img .* 2.^(asrow(ifc.json_metadata.timesMid) / halflife);  % decay-correct
+                %img = img .* 2.^(asrow(ifc.json_metadata.timesMid) / halflife);  % decay-corrected to draw time
                 img = [img, asrow(U.activity(2:end))];
                 img(393:406) = nan;
                 select = ~isnan(img);
@@ -1758,7 +1769,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 %% build tables
 
                 t_drawn2 = rm.countsFdgVenous.TIMEDRAWN_Hh_mm_ss;
-                activity2 = rm.countsFdgVenous.DECAYCorrSpecificActivity_KBq_mL;  % decay-corrected
+                activity2 = rm.countsFdgVenous.DECAYCorrSpecificActivity_KBq_mL;  % decay-corrected to draw time
                 t_elapsed2 = seconds(t_drawn2 - datetime(2022,12,7,10,49,9));
                 T2 = table(t_drawn2, t_elapsed2, activity2);                
                 T2.activity2 = 1e3 * T2.activity2;  % kBq/mL -> Bq/mL
@@ -1770,7 +1781,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
 
                 Tidx = floor(t_elapsed2(1)) - 1;
                 img = ifc.img(1:Tidx); 
-                %img = img .* 2.^(asrow(ifc.json_metadata.timesMid(1:Tidx)) / halflife);  % decay-correct
+                %img = img .* 2.^(asrow(ifc.json_metadata.timesMid(1:Tidx)) / halflife);  % decay-corrected to draw time
                 img = [img, T2.activity2'];  % extend activity using CCIRRadMeasurements
                 ifc.img = img;
 
@@ -1791,7 +1802,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 %% build tables
 
                 t_drawn2 = rm.countsFdgVenous.TIMEDRAWN_Hh_mm_ss;
-                activity2 = rm.countsFdgVenous.DECAYCorrSpecificActivity_KBq_mL;  % decay-corrected
+                activity2 = rm.countsFdgVenous.DECAYCorrSpecificActivity_KBq_mL;  % decay-corrected to draw time
                 t_elapsed2 = seconds(t_drawn2 - datetime(2023,2,27,11,38,53));
                 T2 = table(t_drawn2, t_elapsed2, activity2);                
                 T2.activity2 = 1e3 * T2.activity2;  % kBq/mL -> Bq/mL
@@ -1802,7 +1813,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 ifc = nomodel_ic.imagingFormat;
 
                 img = ifc.img; 
-                %img = img .* 2.^(asrow(ifc.json_metadata.timesMid) / halflife);  % decay-correct
+                %img = img .* 2.^(asrow(ifc.json_metadata.timesMid) / halflife);  % decay-corrected to draw time
                 img = [img, T2.activity2'];  % extend activity using CCIRRadMeasurements
                 ifc.img = img;
 
