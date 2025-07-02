@@ -20,11 +20,11 @@ classdef Registration < handle & matlab.mixin.Heterogeneous & matlab.mixin.Copya
             %  Returns:
             %      this: mlvg.Registration instance
 
-            bids = mlvg.Ccir1211BidsBids(varargin{:});
+            bids = mlvg.Ccir1211Bids(varargin{:});
 
             this = mlvg.Registration("bids", bids, varargin{:});            
-            this.flirt_t2w_to_t1w();
-            this.flirt_flair_to_t1w();
+%            this.flirt_t2w_to_t1w();
+%            this.flirt_flair_to_t1w();
             this.flirt_tof_to_t1w();
             this.flirt_agtracers_to_t1w();
         end

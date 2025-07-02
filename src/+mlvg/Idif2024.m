@@ -11,7 +11,8 @@ classdef Idif2024 < handle & mlsystem.IHandle
     properties (Constant)
         USE_KLUDGE = false
         LC = 0.81  % lumped constant
-        MAIN_TAG = "main7-rc1p85-vrc1-3000"
+        MAIN_TAG = ""  % "-main7-rc1p85-vrc1-3000"
+        MAIN_TAG_FDG = "-main6-rc1p85-1000"
         RECOVERY_COEFFICIENT = 1.8509  % determined from CO for Biograph Vision 600
         TIME_APPEND_SUFFIXES = ["_timeAppend-165", "_timeAppend-80", "_timeAppend-4", ""]
     end
@@ -75,6 +76,8 @@ classdef Idif2024 < handle & mlsystem.IHandle
             pwd0 = pushd(this.derivatives_path);
 
             metrics = [ ...
+                "logZ_ho", ...
+                "logZ_oo", ...
                 "CBV", ...
                 "CBF", ...
                 "lambda", ...
@@ -82,18 +85,21 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 "OEF", ...
                 "fwatermetab", ...
                 "vcapillary", ...
-                "CMRO2", ...
-                "upper_k1", ...
-                "k2", ...
-                "k3", ...
-                "k4", ...
-                "CMRglc", ...
-                "OGI", ...
-                "AGI", ...
-                "logZ_ho", ...
-                "logZ_oo", ...
-                "logZ_fdg"];
+                "CMRO2"              
+                ];
+
+                % "upper_k1", ...
+                % "k2", ...
+                % "k3", ...
+                % "k4", ...
+                % "CMRglc", ...
+                % "OGI", ...
+                % "AGI", ...
+                % "logZ_fdg"
+
             axis_labels = [...
+                "log(Z) [^{15}O] H_2O", ...
+                "log(Z) [^{15}O] O_2", ...
                 "CBV (mL cm^{-3})", ...
                 "CBF (mL cm^{-3} min^{-1})", ...
                 "\lambda (mL cm^{-3})", ...
@@ -101,20 +107,21 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 "OEF", ...
                 "f_{water}", ...
                 "V_{post,cap}", ...
-                "CMRO2 (mmol L^{-1} min^{-1})", ... 
-                "K_1 (mL cm^{-3} min^{-1})", ...
-                "k_2 (min^{-1})", ...
-                "k_3 (min^{-1})", ...
-                "k_4 (min^{-1})", ...
-                "CMRglc (mmol L^{-1} min^{-1})", ...
-                "OGI", ...
-                "AGI (mmol L^{-1} min^{-1})", ...
-                "log(Z) [^{15}O] H_2O", ...
-                "log(Z) [^{15}O] O_2", ...
-                "log(Z) [^{18}F] FDG"];
+                "CMRO2 (mmol L^{-1} min^{-1})"
+                ];
+                
+                % "K_1 (mL cm^{-3} min^{-1})", ...
+                % "k_2 (min^{-1})", ...
+                % "k_3 (min^{-1})", ...
+                % "k_4 (min^{-1})", ...
+                % "CMRglc (mmol L^{-1} min^{-1})", ...
+                % "OGI", ...
+                % "AGI (mmol L^{-1} min^{-1})", ...
+                % "log(Z) [^{18}F] FDG"
+
             for idx = 1:numel(metrics)
                 this.build_rm_raincloud( ...
-                    metric=metrics(idx), axis_label=axis_labels(idx));
+                    metric=metrics(idx), axis_label=axis_labels(idx), show_xlabel=false);
             end
 
             popd(pwd0);
@@ -158,6 +165,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 opts.axis_label {mustBeTextScalar} = "CMRglc (mmol L^{-1} min^{-1})"
                 opts.idx_metric double = 1
                 opts.rescale double = 1 
+                opts.show_xlabel logical = true
             end
             if isemptytext(opts.fname)
                 opts.fname = lower(opts.metric);
@@ -207,13 +215,15 @@ classdef Idif2024 < handle & mlsystem.IHandle
             f_metric  = figure(Position=this.fig_position);
             h = rm_raincloud(data, cl);
             %set(gca, 'YLim', [-0.3 1.6]);
-            xlabel(opts.axis_label);
+            if opts.show_xlabel
+                xlabel(opts.axis_label);
+            end
             if contains(opts.metric, ["OEF", "vcapillary", "fwatermetab", "CMRO2", "logZ_oo"])
                 ylabel("Scans from 6 Participants");
             else
                 ylabel("Participants");
             end
-            fontsize(scale=2.5)
+            fontsize(scale=4)
             saveFigure2(f_metric, fullfile(pwd, lower(opts.metric) + "_raincloud"));
 
             popd(pwd0);
@@ -743,13 +753,13 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
                 opts.stats {mustBeTextScalar} = ""  % "median", "mean", "iqr", "std"
-                opts.model {mustBeTextScalar} = "Raichle1983"
+                opts.context {mustBeTextScalar} = ""  % TissueIO is implicitly Raichle1983
                 opts.trc {mustBeTextScalar} = "trc-ho"
                 opts.idx_metric double = []
             end
             [obj,mg] = this.modelks( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
-                model=opts.model, trc=opts.trc, fhandle=@this.raichleks, fname="raichleks");
+                context=opts.context, trc=opts.trc, fhandle=@this.raichleks, fname="raichleks");
             if isa(obj, "mlfourd.ImagingContext2")
                 ifc = obj.imagingFormat;
                 if ~isempty(opts.idx_metric)
@@ -771,13 +781,15 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
                 opts.stats {mustBeTextScalar} = ""  % "median", "mean", "iqr", "std"
-                opts.model {mustBeTextScalar} = "Mintun1984"
+                opts.model {mustBeTextScalar} = ""
+                opts.context {mustBeTextScalar} = "Mintun1984"
                 opts.trc {mustBeTextScalar} = "trc-oo"
                 opts.idx_metric double = []
-            end            
+            end
+
             [obj,mg] = this.modelks( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
-                model=opts.model, trc=opts.trc, fhandle=@this.mintunks, fname="mintunks");
+                context=opts.context, trc=opts.trc, fhandle=@this.mintunks, fname="mintunks");
             if isa(obj, "mlfourd.ImagingContext2")
                 ifc = obj.imagingFormat;
                 if ~isempty(opts.idx_metric)
@@ -799,13 +811,13 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
                 opts.stats {mustBeTextScalar} = ""  % "median", "mean", "iqr", "std"
-                opts.model {mustBeTextScalar} = "Huang1980"
+                opts.context {mustBeTextScalar} = "Huang1980"
                 opts.trc {mustBeTextScalar} = "trc-fdg"
                 opts.idx_metric double = []
             end            
             [obj,mg] = this.modelks( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
-                model=opts.model, trc=opts.trc, fhandle=@this.huangks, fname="huangks");
+                context=opts.context, trc=opts.trc, fhandle=@this.huangks, fname="huangks");
             if isa(obj, "mlfourd.ImagingContext2")
                 ifc = obj.imagingFormat;
                 if ~isempty(opts.idx_metric)
@@ -822,46 +834,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
         function [obj,mg] = ichiseks(this)
         end
         
-        function [obj,mg] = bayes_factors(this, opts)
-            arguments
-                this mlvg.Idif2024
-                opts.sub {mustBeText} = "sub-*"  % "sub-*", "sub-108293", ...
-                opts.ses {mustBeText} = "ses-*"  % "ses-*", "ses-20210421152358"
-                opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
-                opts.stats {mustBeTextScalar} = ""  % "median", "mean", "iqr", "std"
-                opts.model {mustBeTextScalar} = "Raichle1983"  
-                opts.trc {mustBeTextScalar} = "trc-ho"  
-            end            
-
-            [ic_idif,mg_idif] = this.logz( ...
-                sub=opts.sub, ses=opts.ses, input_func="idif", typeclass="nifti", stats="", ...
-                model=opts.model, trc=opts.trc);  % retain sessions
-            ifc_idif = ic_idif.imagingFormat;
-            [ic_twil,mg_twil] = this.logz( ...
-                sub=opts.sub, ses=opts.ses, input_func="twil", typeclass="nifti", stats="", ...
-                model=opts.model, trc=opts.trc);  % retain sessions
-            ifc_twil = ic_twil.imagingFormat;
-
-            [ifc_idif, ifc_twil] = this.match_globbed(ifc_idif, mg_idif, ifc_twil, mg_twil);
-
-            img = ifc_idif.img - ifc_twil.img;
-            img = squeeze(img);  % awkwardness arises from this.modelks expecting vector params, but logz is scalar
-            ifc_idif.img = img;
-            ifc_idif.fileprefix = strrep(ifc_idif.fileprefix, "logz", "bfactors");
-
-            % apply opts.stats to img if img represents multiple mg;
-            % do not apply opts.stats if there is only one mg
-            if ~isemptytext(opts.stats) && ~isempty(ifc_idif.img) && size(ifc_idif.img, 2) > 1
-                f = str2func(opts.stats);
-                ifc_idif.img = f(ifc_idif.img, ndims(ifc_idif.img));  % apply opts.stats to Nses
-                ifc_idif.fileprefix = ifc_idif.fileprefix + "-" + opts.stats;
-            end
-
-            ic = mlfourd.ImagingContext2(ifc_idif);
-            obj = this.as(ic, opts.typeclass);
-        end
-
-        function [obj,mg] = logz_ho(this, opts)
+                function [obj,mg] = logz_ho(this, opts)
             arguments
                 this mlvg.Idif2024
                 opts.sub {mustBeText} = "sub-*"  % "sub-*", "sub-108293", ...
@@ -873,7 +846,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
 
             [obj,mg] = this.logz( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
-                model="Raichle1983", trc="trc-ho");
+                context="", trc="trc-ho");
         end
 
         function [obj,mg] = logz_oo(this, opts)
@@ -888,7 +861,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
 
             [obj,mg] = this.logz( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
-                model="Mintun1984", trc="trc-oo");
+                context="Mintun1984", trc="trc-oo");
         end
 
         function [obj,mg] = logz_fdg(this, opts)
@@ -903,7 +876,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
 
             [obj,mg] = this.logz( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
-                model="Huang1980", trc="trc-fdg");
+                context="Huang1980", trc="trc-fdg");
         end
 
         function [obj,mg] = logz(this, opts)
@@ -914,12 +887,12 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
                 opts.stats {mustBeTextScalar} = ""  % "median", "mean", "iqr", "std"
-                opts.model {mustBeTextScalar} = "Raichle1983"  
+                opts.context {mustBeTextScalar} = ""  
                 opts.trc {mustBeTextScalar} = "trc-ho"  
             end            
             [obj,mg] = this.modelks( ...
                 sub=opts.sub, ses=opts.ses, input_func=opts.input_func, typeclass=opts.typeclass, stats=opts.stats, ...
-                model=opts.model, trc=opts.trc, fhandle=@this.logz, fname="logz", ...
+                context=opts.context, trc=opts.trc, fhandle=@this.logz, fname="logz", ...
                 metric="logz");
         end
 
@@ -1141,6 +1114,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
             end
             
             s = convertCharsToStrings(s);
+            ses = string();
             for idx = 1:numel(s)
                 [~,ses(idx)] = mlvg.Idif2024.parse_fileprefix(mybasename(s(idx))); %#ok<AGROW>
             end
@@ -1195,12 +1169,13 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 opts.input_func {mustBeTextScalar} = "idif"  % "idif", "boxcar", "aif", "twil", "twilite"
                 opts.typeclass {mustBeTextScalar} = "nifti"  % "nifti", "cifti"
                 opts.stats {mustBeTextScalar} = ""  % "median", "mean", "iqr", "std"
-                opts.model {mustBeTextScalar}
+                opts.model {mustBeTextScalar} = "TissueIO-"  % previously "Mintun1984", "Raichle1983"
                 opts.trc {mustBeTextScalar}
                 opts.fhandle function_handle
                 opts.fname {mustBeTextScalar}  % corresponding to opts.fhandle, e.g., "raichleks", "logz", ...
                 opts.metric {mustBeTextScalar} = "qm"  % "qm", "logz", "information", "residual"
                 opts.main_tag {mustBeTextScalar} = mlvg.Idif2024.MAIN_TAG
+                opts.context {mustBeTextScalar}  % "", "Mintun1984", ...
             end
             if contains(opts.input_func, "boxcar")
                 opts.input_func = "idif";
@@ -1209,14 +1184,17 @@ classdef Idif2024 < handle & mlsystem.IHandle
                 opts.input_func = "twilite";
             end
             if strcmp(opts.trc, "trc-fdg")  %% TEMP WORK-AROUND
-                opts.main_tag = "main6-rc1p85-1000";
+                opts.main_tag = mlvg.Idif2024.MAIN_TAG_FDG;
+            end
+            if ~isemptytext(opts.context) && ~startsWith(opts.context, "-")
+                opts.context = "-" + opts.context;
             end
 
             % metric
             if strcmp(opts.input_func, "idif")
-                metric = opts.model + "Boxcar-" + opts.main_tag + "-" + opts.metric;
+                metric = opts.model + "Boxcar" + opts.context + opts.main_tag + "-" + opts.metric;
             elseif strcmp(opts.input_func, "twilite")
-                metric = opts.model + "Artery-" + opts.main_tag + "-" + opts.metric;
+                metric = opts.model + "Artery" + opts.context + opts.main_tag + "-" + opts.metric;
             else
                 error("mlvg:ValueError", stackstr())
             end
@@ -1253,7 +1231,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
                     [asub,ases] = this.parse_fileprefix(an_mg);
                     ic = opts.fhandle( ...
                         sub=asub, ses=ases, input_func=opts.input_func, typeclass="nifti", ...
-                        model=opts.model, trc=opts.trc);
+                        context=opts.context, trc=opts.trc);
                     img = [img, ic.imagingFormat.img]; %#ok<AGROW>
                 end
                 img = reshape(img, [size(ic.imagingFormat.img), numel(mg)]);  % e.g., Nvoxels x Nparams x Nses

@@ -1294,6 +1294,13 @@ classdef Lee2024 < handle & mlsystem.IHandle
                     cifti.diminfo{2} = cifti_diminfo_make_scalars(1);
                     [pth,fp] = myfileparts(new_fqfn+"-kind"+k);
                     cifti_write(cifti, convertStringsToChars(fullfile(pth, fp + "_median_2.dscalar.nii")));
+
+                    %% write mean(, 2)
+
+                    cifti.cdata = mean(cifti.cdata, 2);
+                    cifti.diminfo{2} = cifti_diminfo_make_scalars(1);
+                    [pth,fp] = myfileparts(new_fqfn+"-kind"+k);
+                    cifti_write(cifti, convertStringsToChars(fullfile(pth, fp + "_mean_2.dscalar.nii")));
                 end
             end
         end       
@@ -1466,6 +1473,8 @@ classdef Lee2024 < handle & mlsystem.IHandle
             end
         end
         function build_schaeffer_4(this)
+            %% just 4 parcels for spot checks, QC, debugging
+
             mats_path = ...
                 fullfile( ...
                 getenv("SINGULARITY_HOME"), ...

@@ -54,10 +54,10 @@ classdef Test_Registration < matlab.unittest.TestCase
  	methods (TestClassSetup)
 		function setupRegistration(this)
  			import mlvg.*;
-            cd(fullfile(getenv("SINGULARITY_HOME"), "CCIR_01211", "derivatives", "sub-108293", "ses-20210218", "anat", ""));
+            cd(fullfile(getenv("SINGULARITY_HOME"), "CCIR_01211", "derivatives", "sub-108007", "ses-20201203", "anat", ""));
             this.bids = mlvg.Ccir1211Bids( ...
                 "projectPath", fullfile(getenv("SINGULARITY_HOME"), "CCIR_01211"), ...
-                "subjectFolder", "sub-108293");
+                "subjectFolder", "sub-108007");
  			this.testObj_ = Registration(this.bids);
  		end
 	end

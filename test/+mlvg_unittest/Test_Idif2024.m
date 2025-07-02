@@ -41,18 +41,18 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             % imagesc(nii);
             % nii_idif = idif2024.martinv1();
             % imagesc(nii_idif);
-            % nii_median = idif2024.martinv1(stats="mean");
+            % nii_median = idif2024.martinv1(stats="median");
             % imagesc(nii_median);
             % nii_iqr = idif2024.martinv1(stats="iqr");
             % imagesc(nii_iqr);
             % nii_coeffvar = nii_iqr ./ nii_median;
             % imagesc(nii_coeffvar);
 
-            cii_idif = idif2024.martinv1(stats="mean", input_func="idif", typeclass="cifti");
+            cii_idif = idif2024.martinv1(stats="median", input_func="idif", typeclass="cifti");
             disp(cii_idif)
             cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
-            cii_twil = idif2024.martinv1(stats="mean", input_func="twilite", typeclass="cifti");
+            cii_twil = idif2024.martinv1(stats="median", input_func="twilite", typeclass="cifti");
             disp(cii_twil)
             cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
@@ -79,18 +79,18 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             % imagesc(nii);
             % nii_idif = idif2024.raichleks();
             % view(nii_idif);
-            % nii_median = idif2024.raichleks(stats="mean");
+            % nii_median = idif2024.raichleks(stats="median");
             % imagesc(nii_median);
             % nii_iqr = idif2024.raichleks(stats="iqr");
             % imagesc(nii_iqr);
             % nii_coeffvar = nii_iqr ./ nii_median;
             % imagesc(nii_coeffvar);
 
-            cii_idif = idif2024.raichleks(stats="mean", input_func="idif", typeclass="cifti");
+            cii_idif = idif2024.raichleks(stats="median", input_func="idif", typeclass="cifti");
             disp(cii_idif)
             cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
-            cii_twil = idif2024.raichleks(stats="mean", input_func="twilite", typeclass="cifti");
+            cii_twil = idif2024.raichleks(stats="median", input_func="twilite", typeclass="cifti");
             disp(cii_twil)
             cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
@@ -117,18 +117,18 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             % imagesc(nii);
             % nii_idif = idif2024.mintunks();
             % view(nii_idif);
-            % nii_median = idif2024.mintunks(stats="mean");
+            % nii_median = idif2024.mintunks(stats="median");
             % imagesc(nii_median);
             % nii_iqr = idif2024.mintunks(stats="iqr");
             % imagesc(nii_iqr);
             % nii_coeffvar = nii_iqr ./ nii_median;
             % imagesc(nii_coeffvar);
 
-            cii_idif = idif2024.mintunks(stats="mean", input_func="idif", typeclass="cifti");
+            cii_idif = idif2024.mintunks(stats="median", input_func="idif", typeclass="cifti");
             disp(cii_idif)
             cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
-            cii_twil = idif2024.mintunks(stats="mean", input_func="twilite", typeclass="cifti");
+            cii_twil = idif2024.mintunks(stats="median", input_func="twilite", typeclass="cifti");
             disp(cii_twil)
             cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
@@ -155,18 +155,18 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             % imagesc(nii);
             % nii_idif = idif2024.huangks();
             % view(nii_idif);
-            % nii_median = idif2024.huangks(stats="mean");
+            % nii_median = idif2024.huangks(stats="median");
             % imagesc(nii_median);
             % nii_iqr = idif2024.huangks(stats="iqr");
             % imagesc(nii_iqr);
             % nii_coeffvar = nii_iqr ./ nii_median;
             % imagesc(nii_coeffvar);
 
-            cii_idif = idif2024.huangks(stats="mean", input_func="idif", typeclass="cifti");
+            cii_idif = idif2024.huangks(stats="median", input_func="idif", typeclass="cifti");
             disp(cii_idif)
             cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
-            cii_twil = idif2024.huangks(stats="mean", input_func="twilite", typeclass="cifti");
+            cii_twil = idif2024.huangks(stats="median", input_func="twilite", typeclass="cifti");
             disp(cii_twil)
             cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
@@ -192,11 +192,11 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             % nii = idif2024.cmro2(stats="", input_func="idif", typeclass="nifti");
             % imagesc(nii);
             
-            cii_idif = idif2024.cmro2(stats="mean", input_func="idif", typeclass="cifti");
+            cii_idif = idif2024.cmro2(stats="median", input_func="idif", typeclass="cifti");
             disp(cii_idif)
             cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
-            cii_twil = idif2024.cmro2(stats="mean", input_func="twilite", typeclass="cifti");
+            cii_twil = idif2024.cmro2(stats="median", input_func="twilite", typeclass="cifti");
             disp(cii_twil)
             cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
@@ -217,11 +217,11 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
             nii = idif2024.cmrglc(stats="", input_func="idif", typeclass="nifti");
             imagesc(nii);
             
-            cii_idif = idif2024.cmrglc(stats="mean", input_func="idif", typeclass="cifti");
+            cii_idif = idif2024.cmrglc(stats="median", input_func="idif", typeclass="cifti");
             disp(cii_idif)
             cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
-            cii_twil = idif2024.cmrglc(stats="mean", input_func="twilite", typeclass="cifti");
+            cii_twil = idif2024.cmrglc(stats="median", input_func="twilite", typeclass="cifti");
             disp(cii_twil)
             cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
@@ -287,33 +287,31 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
         function test_logz(this)
 
-            % return
-
             idif2024 = mlvg.Idif2024();
             pwd0 = pushd(idif2024.derivatives_path);
 
-            %model = "Raichle1983";
-            model = "Mintun1984";
-            %model = "Huang1980";
-            %trc = "trc-ho";
+            % context = "";
+            context = "Mintun1984";
+            % context = "Huang1980";
+            % trc = "trc-ho";
             trc = "trc-oo";
-            %trc = "trc-fdg";
+            % trc = "trc-fdg";
             sub = "sub-*";
             centrality = "median";
             deviation = "iqr";
 
-            nii_idif = idif2024.logz(stats=centrality, sub=sub, input_func="idif", model=model, trc=trc);
+            nii_idif = idif2024.logz(stats=centrality, sub=sub, input_func="idif", context=context, trc=trc);
             disp(nii_idif);
 
-            nii_twil = idif2024.logz(stats=centrality, sub=sub, input_func="twil", model=model, trc=trc);
+            nii_twil = idif2024.logz(stats=centrality, sub=sub, input_func="twil", context=context, trc=trc);
             disp(nii_twil);
 
             %% median, iqr, coeff. var.
 
-            nii_centrality = idif2024.logz(stats=centrality, input_func="idif", model=model, trc=trc);
+            nii_centrality = idif2024.logz(stats=centrality, input_func="idif", context=context, trc=trc);
             plot(nii_centrality);
 
-            nii_deviation = idif2024.logz(stats=deviation, input_func="idif", model=model, trc=trc);
+            nii_deviation = idif2024.logz(stats=deviation, input_func="idif", context=context, trc=trc);
             plot(nii_deviation);
 
             nii_coeffvar = nii_deviation ./ nii_centrality;
@@ -326,47 +324,23 @@ classdef Test_Idif2024 < matlab.unittest.TestCase
 
             %% cifti to write
 
-            cii_idif = idif2024.logz(stats=centrality, input_func="idif", typeclass="cifti", model=model, trc=trc);
+            cii_idif = idif2024.logz(stats=centrality, input_func="idif", typeclass="cifti", context=context, trc=trc);
             disp(cii_idif)
             cifti_write(cii_idif, convertStringsToChars(cii_idif.fqfn));
 
-            cii_twil = idif2024.logz(stats=centrality, input_func="twilite", typeclass="cifti", model=model, trc=trc);
+            cii_twil = idif2024.logz(stats=centrality, input_func="twilite", typeclass="cifti", context=context, trc=trc);
             disp(cii_twil)
             cifti_write(cii_twil, convertStringsToChars(cii_twil.fqfn));
 
             cii_bf = idif2024.as(nii_bf, "cifti");
             s = split(cii_idif.fqfn, "_proc-");
-            cii_bf.fqfn = s(1) + "_proc-schaefer-bfactors-" + centrality + ".dscalar.nii";
+            cii_bf.fqfn = s(1) + "_proc-schaefer-group-bfactors-" + centrality + ".dscalar.nii";
             disp(cii_bf)
             cifti_write(cii_bf, convertStringsToChars(cii_bf.fqfn));
 
             popd(pwd0);
         end
 
-        function test_bayes_factors(this)
-
-            return
-
-            idif2024 = mlvg.Idif2024();
-            pwd0 = pushd(idif2024.derivatives_path);
-
-            %model = "Raichle1983"; trc = "trc-ho";
-            model = "Mintun1984"; trc = "trc-oo";
-            %model = "Huang1980"; trc = "trc-fdg";           
-
-            nii_bf = idif2024.bayes_factors( ...
-                typeclass="nifti", stats="mean", sub="sub-108293", model=model, trc=trc);
-            disp(nii_bf);
-            imagesc(nii_bf);
-
-            cii_bf = idif2024.as(nii_bf, "cifti");
-            s = split(cii_bf.fqfn, "_proc-");
-            cii_bf.fqfn = s(1) + "_proc-schaefer-" + model + "-bfactors-mean.dscalar.nii";
-            disp(cii_bf)
-            cifti_write(cii_bf, convertStringsToChars(cii_bf.fqfn));
-
-            popd(pwd0);
-        end
         function test_rm_raincloud(this)
 
             return
