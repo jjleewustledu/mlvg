@@ -2,7 +2,7 @@ classdef Lee2024 < handle & mlsystem.IHandle
     %% Top-level user interface for softwares supporting 
     %  Lee, et al. to be submitted to Physics in Biology & Medicine, 2024.
     %
-    %  See also:  mlvg.Lee2024_livescript.mlx
+    %  See also:  mlvg.Lee2024_livescript.mlx, mlaif.*, mlkinetics.MipIdifKit
     %
     %  N.B.: all tables with numerical entries include inverse-efficiency
     %  

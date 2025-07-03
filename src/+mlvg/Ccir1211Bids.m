@@ -24,7 +24,7 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
             try
                 this.json_ = mlvg.Ccir1211Json();
             catch ME
-                fprintf("%s: ignoring mlvg.Ccir1211Json\n", stackstr());
+                fprintf("%s: safely ignoring mlvg.Ccir1211Json\n", stackstr());
             end
         end
         function r = registry(~)
@@ -114,13 +114,24 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
                 pth = pth1;
             end
             if contains(info.Modality, 'MR')
+                if contains(lower(info.SeriesDescription), 'localizer')
+                    pth = fullfile(pth, 'localizer');
+                    ensuredir(pth)
+                    return
+                end
                 if contains(lower(info.SeriesDescription), 'fieldmap')
                     pth = fullfile(pth, 'fmap');
                     ensuredir(pth)
                     return
                 end
+                if contains(lower(info.SeriesDescription), 'dti')
+                    pth = fullfile(pth, 'dwi');
+                    ensuredir(pth)
+                    return
+                end
                 if contains(lower(info.SeriesDescription), 'rest') || ...
-                        contains(lower(info.SeriesDescription), 'ase')
+                        contains(lower(info.SeriesDescription), 'ase') || ...
+                        contains(lower(info.SeriesDescription), 'qsm')
                     pth = fullfile(pth, 'func');
                     ensuredir(pth)
                     return
@@ -260,12 +271,50 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
                 end
             end
         end
+        function unpack_metcalf_dicoms(dicoms_best_per_sub)
+            arguments
+                dicoms_best_per_sub {mustBeFile} = ...
+                    "~/mnt/CHPC_scratch/Singularity/CCIR_01211/derivatives/dicoms_best_per_sub.mat"
+            end
+
+            import mlvg.Ccir1211Bids.*
+
+            ld = load(dicoms_best_per_sub);
+            for d = ld.dicoms1  
+                % e.g.: /data/nil-bluearc/vlassenko/RAW_IMAGES/MRI/108007/MR2_20201203/DICOMS
+
+                sub = "sub-" + find_108_substring(d);
+                destination = fullfile("~/mnt/CHPC_scratch/Singularity/CCIR_01211/sourcedata", sub);
+                ensuredir(destination);
+                unpack_cnda( ...
+                    download_folder=d, ...
+                    destination=destination, ...
+                    modality_folder="anat");
+            end
+        end
         function unpack_RAW_IMAGES()
 
             MIR = "/data/nil-bluearc/vlassenko/RAW_IMAGES/MRI";
             sourcedata = "/data/nil-bluearc/vlassenko/jjlee/Singularity/CCIR_01211/sourcedata";
             source_folders = readlines(fullfile(sourcedata, "source_folders.log"));
             subids = readlines(fullfile(sourcedata, "subids.log"));
+        end
+
+        %% HELPERS
+
+        function digit_string = find_108_substring(unix_path)
+            % Find all occurrences of /108xxx/ pattern
+            pattern = '/108\d{3}/';
+            matches = regexp(unix_path, pattern, 'match');
+
+            if ~isempty(matches)
+                % Extract the digits from the first match
+                digit_string = extractBetween(matches{1}, '/', '/');
+                digit_string = digit_string{1};  % extractBetween returns cell array
+            else
+                digit_string = '';
+                warning('No 6-digit substring beginning with "108" found between fileseps');
+            end
         end
     end
 
