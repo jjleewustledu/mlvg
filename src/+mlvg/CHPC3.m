@@ -13,19 +13,38 @@ classdef CHPC3
                 disp(ME)
             end
         end
-        function propcluster()
+
+        function c = propcluster(account_name, opts)
+            arguments
+                account_name = 'manu_goyal'  % 'aristeidis_sotiras' 'joshua_shimony' 'manu_goyal' 'john_lee'
+                opts.partition = 'tier1_cpu'  % 'tier2_cpu' 'tier1_cpu'
+                opts.mempercpu {mustBeTextScalar} = '64gb'
+                opts.walltime {mustBeTextScalar} = '01:00:00'
+            end
+            if strcmp(account_name, 'aristeidis_sotiras')
+                opts.partition = 'tier2_cpu';
+            end
+            account_name = convertStringsToChars(account_name);
+            opts.partition = convertStringsToChars(opts.partition);
+
             c = parcluster;
-            c.AdditionalProperties.EmailAddress = 'jjlee@wustl.edu';
-            c.AdditionalProperties.EnableDebug = 0;
+            c.AdditionalProperties.AccountName = account_name;
+            c.AdditionalProperties.AdditionalSubmitArgs = sprintf('--account=%s', account_name);
+            c.AdditionalProperties.ClusterHost = 'login3.chpc.wustl.edu';
+            c.AdditionalProperties.EmailAddress = '';
+            c.AdditionalProperties.EnableDebug = false;
             c.AdditionalProperties.GpusPerNode = 0;
-            c.AdditionalProperties.MemUsage = '32000'; % in MB
-            c.AdditionalProperties.Node = 1;
-            c.AdditionalProperties.Partition = 'tier2_cpu';
-            c.AdditionalProperties.AdditionalSubmitArgs = '--account=aristeidis_sotiras';
-            c.AdditionalProperties.WallTime = '12:00:00';
-            c.saveProfile
+            c.AdditionalProperties.MemPerCPU = opts.mempercpu;
+            % c.AdditionalProperties.Node = '';
+            c.AdditionalProperties.Partition = opts.partition;
+            c.AdditionalProperties.RemoteJobStorageLocation = '/home/jjlee/.matlab/3p_cluster_jobs/chpc/twistor.attlocal.net.dhcp.wustl.edu/R2024b/nonshared';
+            c.AdditionalProperties.UseIdentityFile = false;
+            c.AdditionalProperties.UseSmpd = false;
+            c.AdditionalProperties.Username = 'jjlee';
+            c.AdditionalProperties.WallTime = opts.walltime;
             disp(c.AdditionalProperties)
         end
+
         function propcluster_tiny()
             c = parcluster;
             c.AdditionalProperties.EmailAddress = '';

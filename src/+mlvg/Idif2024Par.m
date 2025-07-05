@@ -57,6 +57,8 @@ classdef Idif2024Par
                 getenv("HOME"), "PycharmProjects", "dynesty", "idif2024", "main"+opts.version+".py");
             pyrunfile(main_py)
         end
+
+        
     end
     
     %  Created with mlsystem.Newcl, inspired by Frank Gonzalez-Morphy's newfcn.
