@@ -834,7 +834,7 @@ classdef Idif2024 < handle & mlsystem.IHandle
         function [obj,mg] = ichiseks(this)
         end
         
-                function [obj,mg] = logz_ho(this, opts)
+        function [obj,mg] = logz_ho(this, opts)
             arguments
                 this mlvg.Idif2024
                 opts.sub {mustBeText} = "sub-*"  % "sub-*", "sub-108293", ...
