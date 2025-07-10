@@ -1,6 +1,5 @@
 classdef Lee2025Par < handle & mlvg.Lee2025
-    %% line1
-    %  line2
+    %% Use cluster_call:  ho steps 1,4 first; then others steps 1, 4; then all step 5.
     %  
     %  Created 04-Jul-2025 01:08:45 by jjlee in repository /Users/jjlee/MATLAB-Drive/mlvg/src/+mlvg.
     %  Developed on Matlab 24.2.0.2923080 (R2024b) Update 6 for MACA64.  Copyright 2025 John J. Lee.
@@ -19,12 +18,14 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             arguments
                 globbing_mat {mustBeFile} = ...
                     fullfile( ...
-                    getenv("SINGULARITY_HOME"), "CCIR_01211", "mlvg_Lee2025Par_globbing_ho.mat")
+                    getenv("SINGULARITY_HOME"), "CCIR_01211", "mlvg_Lee2025Par_globbing_oo.mat")
                 opts.globbing_var = "globbed"
-                opts.selection_indices double = []  % total ~ 1:58 for ho
-                opts.Ncol {mustBeInteger} = 8
+                opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
+                opts.Ncol {mustBeInteger} = 6
                 opts.method {mustBeTextScalar} = "do_make_input_func"
-                opts.steps {mustBeNumericOrLogical} = 1  % [1,4,5]
+                opts.reference_tracer {mustBeTextScalar} = "ho"
+                opts.steps {mustBeNumericOrLogical} = 4
+                opts.account {mustBeTextScalar} = "manu_goyal"
             end
             ld = load(globbing_mat);
             globbed = convertCharsToStrings(ld.(opts.globbing_var));
@@ -48,14 +49,15 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             warning('off', 'parallel:convenience:BatchFunctionNestedCellArray');
             warning('off', 'MATLAB:TooManyInputs');
 
-            c = mlvg.CHPC3.propcluster('manu_goyal', mempercpu='32gb', walltime='1:00:00');
+            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='8:00:00');
             disp(c.AdditionalProperties)
             for irow = 1:Nrow
                 try
                     j = c.batch( ...
                         @mlvg.Lee2025Par.par_call_ifk, ...
                         1, ...
-                        {globbed(irow, :), 'method', opts.method, 'steps', opts.steps}, ...
+                        {globbed(irow, :), ...
+                        'method', opts.method, 'steps', opts.steps, 'reference_tracer', opts.reference_tracer}, ...
                         'Pool', opts.Ncol, ...
                         'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
                         'AutoAddClientPath', false);

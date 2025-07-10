@@ -85,6 +85,7 @@ classdef CHPC3
             setenv('DEBUG', '');
             setenv('FREESURFER_HOME', '/home/jjlee/.local/freesurfer/freesurfer-7.3.2')
             setenv('FSLDIR', '/export/fsl/fsl-6.0.5')
+            setenv('CCIR_RAD_MEASUREMENTS_DIR', '/scratch/jjlee/Singularity/CCIR_RAD_MEASUREMENTS')
 
             setenv('FSLOUTPUTTYPE', 'NIFTI_GZ')
             setenv('FSLMULTIFILEQUIT', 'TRUE')

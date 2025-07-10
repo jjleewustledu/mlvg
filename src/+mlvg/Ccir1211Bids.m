@@ -61,6 +61,71 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
                 ic.save();
             end
         end
+        
+        function convert_metcalf_niftis(petdir, destdir, opts)
+            %% identifies console recons, copying to destination with
+            %  renaming .nii.gz and .json, and adding json fields "taus", "timesMid".
+
+            arguments
+                petdir {mustBeFolder} = pwd
+                destdir {mustBeFolder} = pwd
+                opts.tracer_patt {mustBeTextScalar} = "FDG Dynamic"  % in json
+                opts.tracer {mustBeTextScalar} = "fdg"
+                opts.tag {mustBeTextScalar} = "consoleDynamic"
+            end
+
+            pwd0 = pushd(petdir);
+            try
+
+                % inspect json files to match tracer_patt
+
+                jfiles = [];
+                for jfile = mglob(fullfile(petdir, "*.json"))
+                    j = jsondecode(fileread(jfile));
+                    if strcmp(j.SeriesDescription, opts.tracer_patt)
+                        jfiles = [jfiles, jfile]; %#ok<AGROW>
+                    end
+                end
+
+                % generate new filenames
+
+                jfiles1 = [];
+                for jfile = jfiles
+                    re = regexp(jfile, "(?<sub>sub-\d{6})/(?<ses>ses-\d{8})", "names");
+                    sub = re.sub;
+                    ses = re.ses;
+                    fqfp = fullfile( ...
+                        destdir, sprintf("%s_%s_trc-%s_proc-%s", sub, ses, opts.tracer, opts.tag));
+                    jfiles1 = [jfiles1, fqfp + ".json"]; %#ok<AGROW>
+                end
+
+                % copy json and nii.gz to destination
+
+                nfiles = strrep(jfiles, ".json", ".nii.gz");
+                nfiles1 = strrep(jfiles1, ".json", ".nii.gz");
+                for jidx = 1:length(jfiles)
+                    copyfile(jfiles(jidx), jfiles1(jidx));
+                    copyfile(nfiles(jidx), nfiles1(jidx));
+                end
+
+                % for FDG Dynamic add taus, timesMid to json, updating json on filesystem
+
+                if contains(opts.tracer_patt, "Dynamic")
+                    for jidx = 1:length(jfiles1)
+                        jfile1 = jfiles1(jidx);
+                        j1 = jsondecode(fileread(jfile1));
+                        j1.taus = j1.FrameDuration;
+                        j1.timesMid = j1.FrameReferenceTime;
+                        writelines(jsonencode(j1, PrettyPrint=true), jfile1);
+                    end
+                end
+
+            catch ME
+                handwarning(ME)
+            end
+            popd(pwd0);
+        end
+
         function this = create(varargin)
             this = mlvg.Ccir1211Bids(varargin{:});
         end
