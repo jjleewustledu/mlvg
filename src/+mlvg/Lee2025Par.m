@@ -69,6 +69,65 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             [msg,id] = lastwarn();
         end
 
+        function [j,c,msg,id] = cluster_time_align(globbing_mat, opts)
+            %% for clusters running Matlab parallel server
+
+            arguments
+                globbing_mat {mustBeFile} = ...
+                    fullfile( ...
+                    getenv("SINGULARITY_HOME"), "CCIR_01211", "mlvg_Lee2025Par_globbing_oo.mat")
+                opts.globbing_var = "globbed"
+                opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
+                opts.Ncol {mustBeInteger} = 8
+                opts.account {mustBeTextScalar} = "manu_goyal"
+            end
+            ld = load(globbing_mat);
+            globbed = convertCharsToStrings(ld.(opts.globbing_var));
+            globbed = asrow(globbed);
+            if ~isempty(opts.selection_indices)
+                globbed = globbed(opts.selection_indices);
+            end
+            if contains(globbing_mat, "fdg", IgnoreCase=true)
+                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='256gb', walltime='12:00:00');
+                opts.Ncol = 1;
+            else
+                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='4:00:00');
+                opts.Ncol = 8;
+            end
+
+            % pad and reshape globbed
+            Nrow = ceil(numel(globbed)/opts.Ncol);
+            padding = repmat("", [1, opts.Ncol*Nrow - numel(globbed)]);
+            globbed = [globbed, padding];
+            globbed = reshape(globbed, Nrow, opts.Ncol);
+            fprintf("%s:globbed:\n", stackstr())
+            disp(size(globbed))
+            disp(ascol(globbed))
+
+            % contact cluster slurm
+
+            warning('off', 'MATLAB:legacy:batchSyntax');
+            warning('off', 'parallel:convenience:BatchFunctionNestedCellArray');
+            warning('off', 'MATLAB:TooManyInputs');
+
+            disp(c.AdditionalProperties)
+            for irow = 1:Nrow
+                try
+                    j = c.batch( ...
+                        @mlvg.Lee2025Par.par_time_align, ...
+                        1, ...
+                        {globbed(irow, :)}, ...
+                        'Pool', opts.Ncol, ...
+                        'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
+                        'AutoAddClientPath', false);
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            [msg,id] = lastwarn();
+        end
+
         function durations = par_call_ifk(nii, opts)
             arguments
                 nii {mustBeText} = "sourcedata/sub-108007/ses-20210219145054/pet/sub-108007_ses-20210219145054_trc-ho_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
@@ -92,6 +151,35 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                     % construct & call
                     lp = mlvg.Lee2025Par(nii(sidx), out_dir=opts.out_dir); %#ok<PFBNS>
                     call_ifk(lp, method=opts.method, steps=opts.steps, reference_tracer=opts.reference_tracer);
+                catch ME
+                    handwarning(ME)
+                end
+
+                durations(sidx) = toc;
+            end
+        end
+
+
+        function durations = par_time_align(nii, opts)
+            arguments
+                nii {mustBeText} = "sourcedata/sub-108007/ses-20210219143132/pet/sub-108007_ses-20210219143132_trc-oo_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
+                opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
+            end
+            
+            nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells
+            durations = nan(1, length(nii));
+
+            parfor sidx = 1:length(nii)
+
+                tic;
+            
+                % setup
+                mlvg.CHPC3.setenvs();
+
+                try
+                    nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
+                    globbed = mglob(strrep(nii_fqfn, "delay0", "delay*"));
+                    mlvg.Lee2025.time_align(globbed);
                 catch ME
                     handwarning(ME)
                 end

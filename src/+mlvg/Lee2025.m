@@ -289,6 +289,73 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             end
         end
+
+        function time_align(fqfns, opts)
+            arguments
+                fqfns {mustBeText}
+                opts.noclobber logical = true
+            end
+            fqfns = convertCharsToStrings(fqfns);
+            assert(all(arrayfun(@isfile, fqfns)))
+            assert(all(arrayfun(@(x) contains(x, "-delay"), fqfns)))
+
+            % separate ref & its avgt
+            idx_delay0 = find(contains(fqfns, "-delay0"));
+            ref_ic = mlfourd.ImagingContext2(fqfns(idx_delay0));
+            if ~isfile(ref_ic.fqfp + "_avgt.nii.gz")
+                ref_avgt_ic = ref_ic.timeAveraged();
+                ref_avgt_ic.save();
+            else
+                ref_avgt_ic = mlfourd.ImagingContext2(ref_ic.fqfp + "_avgt.nii.gz");
+            end
+
+            % rename non-ref files "-delay*" to "-unaligned*"
+            fqfns1 = fqfns;
+            fqfns1(idx_delay0) = [];
+            unaligned_fqfns1 = strrep(fqfns1, "-delay", "-unaligned");
+            json_fqfns1 = strrep(fqfns1, ".nii.gz", ".json");
+            unaligned_json_fqfns1 = strrep(json_fqfns1, "-delay", "-unaligned");
+            arrayfun(@(x, y) movefile(x, y), fqfns1, unaligned_fqfns1);
+            arrayfun(@(x, y) movefile(x, y), json_fqfns1, unaligned_json_fqfns1);
+
+            % construct non-ref avgt
+            unaligned_avgt_fqfn = string();
+            for idx = 1:length(unaligned_fqfns1)
+                unaligned_ic__ = mlfourd.ImagingContext2(unaligned_fqfns1(idx));
+                unaligned_avgt_ic__ = unaligned_ic__.timeAveraged();
+                unaligned_avgt_ic__.save();
+                unaligned_avgt_fqfn(idx) = unaligned_avgt_ic__.fqfn;
+            end
+
+            % flirt all non-ref avgt to ref avgt; apply transformations to time-series
+            outs = strrep(unaligned_avgt_fqfn, ".nii.gz", "_on_ref.nii.gz");
+            omats = strrep(unaligned_avgt_fqfn, ".nii.gz", "_on_ref.mat");
+            for idx = 1:length(unaligned_avgt_fqfn)
+                flirt = mlfsl.Flirt( ...
+                    'in', unaligned_avgt_fqfn(idx), ...
+                    'ref', ref_avgt_ic, ...
+                    'out', outs(idx), ...
+                    'omat', omats(idx), ...
+                    'bins', 256, ...
+                    'cost', 'mutualinfo', ...
+                    'dof', 6, ...
+                    'interp', 'trilinear', ...
+                    'noclobber', false);
+                if ~opts.noclobber || ~isfile(outs(idx))
+                    % do expensive coreg.
+                    flirt.flirt();
+                    assert(isfile(outs(idx)))
+
+                    % apply to time-series
+                    flirt.in = unaligned_fqfns1(idx);
+                    flirt.out = fqfns1(idx);
+                    flirt.ref = ref_avgt_ic;
+                    flirt.interp = 'trilinear';
+                    flirt.applyXfm();
+                    assert(isfile(fqfns1(idx)))
+                end
+            end
+        end
     end
     
     %  Created with mlsystem.Newcl, inspired by Frank Gonzalez-Morphy's newfcn.
