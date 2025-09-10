@@ -69,8 +69,8 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
             arguments
                 petdir {mustBeFolder} = pwd
                 destdir {mustBeFolder} = pwd
-                opts.tracer_patt {mustBeTextScalar} = "FDG Dynamic"  % in json
-                opts.tracer {mustBeTextScalar} = "fdg"
+                opts.tracer_patt {mustBeTextScalar} = "CO1 Dynamic"  % in json
+                opts.tracer {mustBeTextScalar} = "co"
                 opts.tag {mustBeTextScalar} = "consoleDynamic"
             end
 
@@ -92,8 +92,23 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
                 jfiles1 = [];
                 for jfile = jfiles
                     re = regexp(jfile, "(?<sub>sub-\d{6})/(?<ses>ses-\d{8})", "names");
+                    if isempty(re)
+                        re = regexp(jfile, "(?<sub>\d{6})_(?<ses>\d{8})\S+", "names");
+                    end
+                    if isempty(re)
+                        re = regexp(jfile, "(?<sub>\d{6})_\w+_(?<ses>\d{8})\S+", "names");
+                    end
+                    if isempty(re)
+                        error("mlvg:ValueError", stackstr())
+                    end
                     sub = re.sub;
                     ses = re.ses;
+                    if ~startsWith(sub, "sub-")
+                        sub = "sub-" + sub;
+                    end
+                    if ~startsWith(ses, "ses-")
+                        ses = "ses-" + ses;
+                    end
                     fqfp = fullfile( ...
                         destdir, sprintf("%s_%s_trc-%s_proc-%s", sub, ses, opts.tracer, opts.tag));
                     jfiles1 = [jfiles1, fqfp + ".json"]; %#ok<AGROW>
@@ -108,7 +123,7 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
                     copyfile(nfiles(jidx), nfiles1(jidx));
                 end
 
-                % for FDG Dynamic add taus, timesMid to json, updating json on filesystem
+                % for Dynamic add taus, timesMid to json, updating json on filesystem
 
                 if contains(opts.tracer_patt, "Dynamic")
                     for jidx = 1:length(jfiles1)
@@ -138,6 +153,7 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
             %      ses_fold (text):  e.g., "ses-20250101".
 
             assert(~isempty(dcm))
+            dcm = convertStringsToChars(dcm);
             if iscell(dcm)
                 dcm = dcm{1};
             end
@@ -299,6 +315,8 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
             fclose(fid); 
         end
         function unpack_cnda(varargin)
+            %% DICOMs => NIfTI
+            %  e.g.:  mlvg.Ccir1211Bids.unpack_cnda(download_folder="108044/MR2_20211111/DICOMS/108044_MR2_20211111/10", destination="~/mnt/CCIR_scratch/Singularity/CCIR_01211/derivatives/sub-108044")
             %  Params:
             %      download_folder (folder):  e.g., /Users/jjlee/Downloads/CNDA_XNAT_Desktop_Client/cnda.wustl.edu/108293_MAG_20210421
             %      destination (folder):  e.g., /Users/jjlee/Singularity/CCIR_02111/sourcedata/sub-108293
@@ -314,7 +332,7 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
 
             for series = globFoldersT(fullfile(ipr.download_folder, '*'))
                 try
-                    dcms = glob(fullfile(series{1}, 'DICOM', '*.dcm'));
+                    dcms = mglob(fullfile(series{1}, '**', '*.dcm'));
                     [fileprefix,info,ses_fold] = dcm2fileprefix(dcms);
                     if contains(lower(info.SeriesDescription), 'setter')
                         continue
@@ -359,7 +377,7 @@ classdef Ccir1211Bids < handle & mlsiemens.BiographBids
         end
         function unpack_RAW_IMAGES()
 
-            MIR = "/data/nil-bluearc/vlassenko/RAW_IMAGES/MRI";
+            MRI = "/data/nil-bluearc/vlassenko/RAW_IMAGES/MRI";
             sourcedata = "/data/nil-bluearc/vlassenko/jjlee/Singularity/CCIR_01211/sourcedata";
             source_folders = readlines(fullfile(sourcedata, "source_folders.log"));
             subids = readlines(fullfile(sourcedata, "subids.log"));

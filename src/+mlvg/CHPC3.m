@@ -8,7 +8,9 @@ classdef CHPC3
         function clean_tempdir()
             try
                 deleteExisting(fullfile(tempdir, '*.nii*'));
+                deleteExisting(fullfile(tempdir, '*.mat'));
                 deleteExisting(fullfile(tempdir, '*.save'));
+                deleteExisting(fullfile(tempdir, 'tp*'));
             catch ME
                 disp(ME)
             end
@@ -43,6 +45,11 @@ classdef CHPC3
             c.AdditionalProperties.Username = 'jjlee';
             c.AdditionalProperties.WallTime = opts.walltime;
             disp(c.AdditionalProperties)
+
+            warning('off', 'MATLAB:legacy:batchSyntax');
+            warning('off', 'parallel:convenience:BatchFunctionNestedCellArray');
+            warning('off', 'MATLAB:TooManyInputs');
+            warning('off', 'MATLAB:mir_warning_maybe_uninitialized_temporary')
         end
 
         function propcluster_tiny()
@@ -72,45 +79,11 @@ classdef CHPC3
             disp(c.AdditionalProperties)
         end
         function setenvs()
-            [~,r] = system('hostname');
-            if ~contains(r, 'cluster')
+            if ~isInParallelWorker()
                 return
             end
 
-            setenv('TMPDIR', '/scratch/jjlee/tmp') % worker nodesk
-
-            setenv('SINGULARITY_HOME', '/scratch/jjlee/Singularity')
-            setenv('AFNIPATH', '/export/afni/afni-20.3.03/linux_openmp_64')
-            setenv('ANTSPATH', '/export/ants/ants-2.3.5/bin')
-            setenv('DEBUG', '');
-            setenv('FREESURFER_HOME', '/home/jjlee/.local/freesurfer/freesurfer-7.3.2')
-            setenv('FSLDIR', '/export/fsl/fsl-6.0.5')
-            setenv('CCIR_RAD_MEASUREMENTS_DIR', '/scratch/jjlee/Singularity/CCIR_RAD_MEASUREMENTS')
-
-            setenv('FSLOUTPUTTYPE', 'NIFTI_GZ')
-            setenv('FSLMULTIFILEQUIT', 'TRUE')
-            setenv('FSLTCLSH', fullfile(getenv('FSLDIR'),'bin','fsltclsh'))
-            setenv('FSLWISH', fullfile(getenv('FSLDIR'),'bin','fslwish'))
-            setenv('FSLLOCKDIR', '')
-            setenv('FSLMACHINELIST', '')
-            setenv('FSLREMOTECALL', '')
-            setenv('FSLREMOTECALL', 'cuda.q')
-            setenv('PYOPENGL_PLATFORM', 'osmesa')
-
-            setenv('REFDIR', '/home/jjlee/.local/atlas')
-            setenv('RELEASE', '/home/jjlee/.local/lin64-tools')            
-            setenv('PATH', ...
-                strcat(getenv('RELEASE'), ':', ...
-                       getenv('AFNIPATH'), ':', ...
-                       fullfile(getenv('FREESURFER_HOME'), 'bin'), ':', ...
-                       fullfile(getenv('FSLDIR'), 'bin'), ':', ...
-                       '/export/singularity/singularity-3.9.0/bin', ':', ...
-                       getenv('PATH')))
-            setenv('LD_LIBRARY_PATH', ...
-                strcat('/usr/lib64', ':', getenv('LD_LIBRARY_PATH'))) % need libOSMesa.so.8 for fsleyes render
-                   
-            %disp("mladni.CHPC3.setenvs():getenv('PATH'):")
-            %disp(getenv('PATH'))
+            setenv('DEBUG_SETENVS', '1')
         end
     end
     

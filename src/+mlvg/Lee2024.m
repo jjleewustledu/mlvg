@@ -1364,12 +1364,32 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 this.build_martin_v1(petFqfn, U_img, V_img);
             end
         end
+        function build_all_martin_v1_idif(this)
+            import mlkinetics.*
+
+            ld = load(fullfile( ...
+                getenv("SINGULARITY_HOME"), "CCIR_01211", "mlvg_Lee2025Par_globbing_co.mat"));
+            globbed_co = ld.globbed;
+
+            for g = globbed_co
+                try
+                    petFqfn = g;
+                    [pth,fp] = myfileparts(petFqfn);
+                    schaeferFqfn = fullfile(pth, fp + "-ParcSchaeffer-reshape-to-schaeffer-schaeffer.nii.gz");
+                    schaefer = mlfoud.ImagingFormatContext(schaeferFqfn);
+                    U_img = schaefer.img;
+                    this.build_martin_v1(petFqfn, U_img);
+                catch ME
+                    handwarning(ME)
+                end
+            end
+        end
         function build_martin_v1(this, petFqfn, U_img, V_img)
             arguments
                 this mlvg.Lee2024
                 petFqfn {mustBeFile}
-                U_img {mustBeNumeric}
-                V_img {mustBeNumeric}
+                U_img {mustBeNumeric} = []
+                V_img {mustBeNumeric} = []
             end
 
             import mlkinetics.*
@@ -1410,29 +1430,33 @@ classdef Lee2024 < handle & mlsystem.IHandle
                 ic1.save();
             end
 
-            try
-                ifc2 = ic1.imagingFormat;
-                % U_img = smoothdata(U_img);
-                ifc2.img = 1e-3 * ifc2.img ./ U_img;  % kBq/mL -> Bq/mL
-                ifc2.img = mean(ifc2.img(:, 121:end), 2);
-                ifc2.fileprefix = ifc2.fileprefix + "-idif_martinv1";
-                ifc2.save();
-            catch ME
-                handwarning(ME)
+            if ~isempty(U_img)
+                try
+                    ifc2 = ic1.imagingFormat;
+                    % U_img = smoothdata(U_img);
+                    ifc2.img = 1e-3 * ifc2.img ./ U_img;  % kBq/mL -> Bq/mL
+                    ifc2.img = mean(ifc2.img(:, 121:end), 2);
+                    ifc2.fileprefix = ifc2.fileprefix + "-idif_martinv1";
+                    ifc2.save();
+                catch ME
+                    handwarning(ME)
+                end
             end
 
-            try
-                ifc3 = ic1.imagingFormat;
-                % V_img = smoothdata(V_img);
-                Nt = min(size(ifc3.img, 2), length(V_img));
-                ifc3.img = 1e-3 * ifc3.img(:, 1:Nt) ./ V_img(1:Nt);  % kBq/mL -> Bq/mL
-                ifc3.img = mean(ifc3.img(:, 121:end), 2);
-                ifc3.fileprefix = ifc3.fileprefix + "-twilite_martinv1";
-                if ~any(isnan(ifc3.img))
-                    ifc3.save();
+            if ~isempty(V_img)
+                try
+                    ifc3 = ic1.imagingFormat;
+                    % V_img = smoothdata(V_img);
+                    Nt = min(size(ifc3.img, 2), length(V_img));
+                    ifc3.img = 1e-3 * ifc3.img(:, 1:Nt) ./ V_img(1:Nt);  % kBq/mL -> Bq/mL
+                    ifc3.img = mean(ifc3.img(:, 121:end), 2);
+                    ifc3.fileprefix = ifc3.fileprefix + "-twilite_martinv1";
+                    if ~any(isnan(ifc3.img))
+                        ifc3.save();
+                    end
+                catch ME
+                    handwarning(ME)
                 end
-            catch ME
-                handwarning(ME)
             end
         end
                 
