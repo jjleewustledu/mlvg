@@ -854,6 +854,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             arguments
                 fqfn {mustBeFile}
                 opts.specialize_for_tracer logical = true
+                opts.noclobber logical = true
             end
 
             if contains(fqfn, "sub-108259_ses-20230731133714")
@@ -891,7 +892,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 'interp', 'spline', ...
                 'noclobber', false);
             ensuredir(fileparts(t1w_on_tracer))
-            if ~isfile(t1w_on_tracer)
+            if ~opts.noclobber || ~isfile(t1w_on_tracer)
                 flirt.flirt();
                 assert(isfile(t1w_on_tracer))
             end
@@ -957,7 +958,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             arguments
                 oo_fqfn {mustBeFile}
-                opts.noclobber logical = false
+                opts.noclobber logical = true
             end
 
             import mlvg.Lee2025.find_ho_avgt

@@ -674,13 +674,13 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             arguments
                 globbing_mat {mustBeFile} = ...
                     fullfile( ...
-                    getenv("SINGULARITY_HOME"), "CCIR_01211", "mlvg_Lee2025Par_globbing_co.mat")
+                    getenv("SINGULARITY_HOME"), "CCIR_01211", "srcdata_fdg.mat")
                 opts.globbing_var = "globbed"
                 opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
                 opts.Ncol {mustBeInteger} = 1
-                opts.method {mustBeTextScalar} = "do_make_input_func"
-                opts.reference_tracer {mustBeTextScalar} = "ho"
-                opts.steps {mustBeNumericOrLogical} = 5
+                opts.method {mustBeTextScalar} = "srcdata_fdg"
+                opts.reference_tracer {mustBeTextScalar} = "fdg"
+                opts.steps {mustBeNumericOrLogical} = 1
                 opts.account {mustBeTextScalar} = "manu_goyal"
             end
             c = mlvg.CHPC3.propcluster(opts.account, mempercpu='128gb', walltime='12:00:00');
@@ -791,10 +791,10 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
             arguments
                 globbing_mat {mustBeFile} = ...
-                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "globbed_oo_missing_t1w.mat")
-                opts.globbing_var = "globbed_oo_missing_t1w"
+                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_fdg_todo.mat")
+                opts.globbing_var = "srcdata_fdg_todo"
                 opts.selection_indices double = []
-                opts.Ncol {mustBeInteger} = 2  % 8
+                opts.Ncol {mustBeInteger} = 4
                 opts.account {mustBeTextScalar} = "manu_goyal"
             end
             ld = load(globbing_mat);
