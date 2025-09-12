@@ -842,8 +842,9 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             arguments
                 fqfns {mustBeText}
                 opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
-                opts.M {mustBeScalarOrEmpty} = 8
+                opts.M {mustBeScalarOrEmpty} = 4  % 8
                 opts.select {mustBeInteger} = 1
+                opts.do_make_finite logical = false
             end
             if ~contains(fqfns(1), opts.out_dir)
                 fqfns = fullfile(opts.out_dir, fqfns);
@@ -855,104 +856,26 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             
             if isscalar(fqfns)
                 try
-                    tic
-
                     % setup
                     mlvg.CHPC3.setenvs();
 
                     fqfn = fqfns(1);
-                    petMed = mlvg.Ccir1211Mediator.create(fqfn);
-
-                    foundT1w = mglob(fullfile(petMed.derivPetPath, "T1w_on_*.nii.gz"));
-                    if isempty(foundT1w)
-                        return
-                    end
-                    foundRef = mglob(fullfile(petMed.sourcePetPath, extractAfter(mybasename(foundT1w, withext=true), "T1w_on_")));
-                    if isempty(foundRef)
-                        return
-                    end
-                    imagingReference = mlfourd.ImagingContext2(foundRef);
-                    schaef_flirted_fqfn = strcat(petMed.fqfp, "-schaeffer.nii.gz");
-                    schaef_flirted_fqfn = strrep(schaef_flirted_fqfn, "sourcedata", "derivatives");
-                    target_fqfn = strrep(schaef_flirted_fqfn, "-schaeffer", mlvg.Lee2025Par.PARC_SCHAEF_TAG);
-                    if isfile(target_fqfn)
-                        return
-                    end
-                    omat = fullfile(petMed.derivPetPath, mybasename(foundT1w) + ".mat");
-                    if ~isfile(omat)
-                        omat = mglob(fullfile(petMed.derivSubPath, "ses-*", "pet", "T1w_on_" + lower(petMed.tracer) + ".mat"));
-                        omat = omat(opts.select);
-                    end
-                    flirt = mlfsl.Flirt( ...
-                        'in', petMed.schaeffer_ic, ...
-                        'ref', imagingReference, ...
-                        'out', schaef_flirted_fqfn, ...
-                        'omat', omat, ...
-                        'bins', 1024, ...
-                        'interp', 'nearestneighbour', ...
-                        'noclobber', true);
-                    flirt.applyXfm();
-
-                    bk = BidsKit.create(bids_tags="ccir1211", bids_fqfn=schaef_flirted_fqfn);
-                    pk = ParcKit.create(bids_kit=bk, parc_tags="schaeffer-schaeffer");
-                    p = pk.make_parc();
-
-                    ic1 = p.reshape_to_parc_fast(fqfn);
-                    ic1.save();
-
-                    durations(1) = toc;
+                    durations = mlvg.Lee2025Par.build_schaeffer_parc( ...
+                        fqfn, ...
+                        out_dir=opts.out_dir, do_make_finite=opts.do_make_finite);
                 catch ME
                     handwarning(ME)
                 end
             else
                 parfor (fidx = 1:length(fqfns), opts.M)
                     try
-                        tic
-
                         % setup
                         mlvg.CHPC3.setenvs();
 
                         fqfn = fqfns(fidx);
-                        petMed = mlvg.Ccir1211Mediator.create(fqfn);
-
-                        foundT1w = mglob(fullfile(petMed.derivPetPath, "T1w_on_*.nii.gz"))
-                        if isempty(foundT1w)
-                            continue
-                        end
-                        foundRef = mglob(fullfile(petMed.sourcePetPath, extractAfter(mybasename(foundT1w, withext=true), "T1w_on_")));
-                        if isempty(foundRef)
-                            continue
-                        end
-                        imagingReference = mlfourd.ImagingContext2(foundRef);
-                        schaef_flirted_fqfn = strcat(petMed.fqfp, "-schaeffer.nii.gz");
-                        schaef_flirted_fqfn = strrep(schaef_flirted_fqfn, "sourcedata", "derivatives");
-                        target_fqfn = strrep(schaef_flirted_fqfn, "-schaeffer", mlvg.Lee2025Par.PARC_SCHAEF_TAG);
-                        if isfile(target_fqfn)
-                            continue
-                        end
-                        omat = fullfile(petMed.derivPetPath, mybasename(foundT1w) + ".mat");
-                        if ~isfile(omat)
-                            omat = mglob(fullfile(petMed.derivSubPath, "ses-*", "pet", "T1w_on_" + lower(petMed.tracer) + ".mat"));
-                            omat = omat(opts.select);
-                        end
-                        flirt = mlfsl.Flirt( ...
-                            'in', petMed.schaeffer_ic, ...
-                            'ref', imagingReference, ...
-                            'out', schaef_flirted_fqfn, ...
-                            'omat', omat, ...
-                            'bins', 1024, ...
-                            'interp', 'nearestneighbour', ...
-                            'noclobber', true);
-                        flirt.applyXfm();
-
-                        bk = BidsKit.create(bids_tags="ccir1211", bids_fqfn=schaef_flirted_fqfn);
-                        pk = ParcKit.create(bids_kit=bk, parc_tags="schaeffer-schaeffer");
-                        p = pk.make_parc();
-
-                        ic1 = p.reshape_to_parc(petMed.imagingContext);
-                        ic1.save();
-
-                        durations(fidx) = toc;
+                        durations(fidx) = mlvg.Lee2025Par.build_schaeffer_parc( ...
+                            fqfn, ...
+                            out_dir=opts.out_dir, do_make_finite=opts.do_make_finite); %#ok<PFBNS>
                     catch ME
                         handwarning(ME)
                     end

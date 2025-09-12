@@ -8,8 +8,8 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
     properties (Constant)
         % PARC_SCHAEF_TAG = "-ParcSchaeffer-reshape-to-schaeffer-schaeffer"
-        PARC_SCHAEF_TAG = "-ParcSchaeffer-invariant-schaeffer-schaeffer"
-        % PARC_SCHAEF_TAG = "-ParcSchaeffer-highsnr-schaeffer-schaeffer"
+        % PARC_SCHAEF_TAG = "-ParcSchaeffer-invariant-schaeffer-schaeffer"
+        PARC_SCHAEF_TAG = "-ParcSchaeffer-highsnr-schaeffer-schaeffer"
     end
 
     properties
@@ -73,8 +73,8 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 opts.nii = this.nii;
                 opts.out_dir = this.out_dir;
                 opts.method {mustBeTextScalar} = "do_make_input_func"
-                opts.reference_tracer {mustBeTextScalar} = "ho"
-                opts.steps {mustBeNumericOrLogical} = 5
+                opts.reference_tracer {mustBeTextScalar} = "fdg"
+                opts.steps {mustBeNumericOrLogical} = 1
             end
 
             % exclusions
@@ -166,46 +166,64 @@ classdef Lee2025 < handle & mlsystem.IHandle
     %% HELPERS
 
     methods (Static)
-        function durations = build_schaeffer_parc(fqfns, opts)
-            %% e.g.,
+        function build_3dresample(fqfn)
+            ic = mlfourd.ImagingContext2(fqfn);
+            src_pth = fileparts(fqfn);
+            derivs_pth = strrep(src_pth, "sourcedata", "derivatives");
+            ensuredir(derivs_pth);
+
+            pwd0 = pushd(src_pth);            
+            ic.afni_3dresample(orient_std=true);
+            if ~strcmp(derivs_pth, ic.filepath)
+                mysystem(sprintf("cp -f %s.* %s", ic.fqfileprefix, derivs_pth));
+                mysystem(sprintf("rm -f %s.*", ic.fqfileprefix));
+            end
+            popd(pwd0);
+        end
+
+        function duration = build_schaeffer_parc(fqfn, opts)
+            %% 1st:  run with do_make_finite=false to build all delay\d+ 
+            %  2nd:  run again with do_make_finite=true to build -finite
+            %  e.g.,
             %  sub-108306_ses-20230227113853_trc-ho_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz ->
             %  sub-108306_ses-20230227113853_trc-ho_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames-ParcSchaeffer-reshape-to-schaeffer-schaeffer.nii.gz
 
             arguments
-                fqfns {mustBeText}
+                fqfn {mustBeTextScalar}
                 opts.out_dir {mustBeFolder} = fullfile(getenv("SINGULARITY_HOME"), "CCIR_01211")
                 opts.do_plot logical = false
+                opts.do_make_finite logical = false
             end
-            if ~contains(fqfns(1), opts.out_dir)
-                fqfns = fullfile(opts.out_dir, fqfns);
+            if ~contains(fqfn, opts.out_dir)
+                fqfn = fullfile(opts.out_dir, fqfn);
             end
 
             import mlkinetics.*
 
-            durations = nan(1, length(fqfns));
+            duration = nan;
+            try
+                tic
 
-            for fidx = 1:length(fqfns)
-                try
-                    tic
+                if ~opts.do_make_finite
 
-                    fqfn = fqfns(fidx);
+                    % 1st run
                     petMed = mlvg.Ccir1211Mediator.create(fqfn);
 
                     trc = lower(petMed.tracer);
                     foundT1w = mglob(fullfile(petMed.derivPetPath, sprintf("T1w_on_*trc-%s*.nii.gz", trc)));
                     if isempty(foundT1w)
-                        continue
+                        return
                     end
                     foundRef = mglob(fullfile(petMed.sourcePetPath, extractAfter(mybasename(foundT1w, withext=true), "T1w_on_")));
                     if isempty(foundRef)
-                        continue
+                        return
                     end
                     imagingReference = mlfourd.ImagingContext2(foundRef);
                     schaef_flirted_fqfn = strcat(petMed.fqfp, "-schaeffer.nii.gz");
                     schaef_flirted_fqfn = strrep(schaef_flirted_fqfn, "sourcedata", "derivatives");
                     target_fqfn = strrep(schaef_flirted_fqfn, "-schaeffer", mlvg.Lee2025.PARC_SCHAEF_TAG);
-                    if isfile(target_fqfn)
-                        continue
+                    if isfile(target_fqfn)  % from ic1 = p.reshape_to_parc_fast(fqfn);
+                        return
                     end
                     omat = fullfile(petMed.derivPetPath, mybasename(foundT1w) + ".mat");
                     if ~isfile(omat)
@@ -226,27 +244,34 @@ classdef Lee2025 < handle & mlsystem.IHandle
                     pk = ParcKit.create(bids_kit=bk, parc_tags="schaeffer-schaeffer");
                     p = pk.make_parc();
 
-                    ic1 = p.reshape_to_parc_fast(fqfn);  % petMed.imagingContext                    
+                    ic1 = p.reshape_to_parc_fast(fqfn);  % petMed.imagingContext
                     ic1.save();
+                else
                     
-                    if opts.do_plot
-                        disp(ic1.fqfn)
-                        plot(ic1')
-                    end
-
-                    durations(fidx) = toc;
-                catch ME
-                    handwarning(ME)
+                    % 2nd run
+                    mlvg.Lee2025.build_schaeffer_finite(fqfn, do_save=true);
                 end
+
+                if opts.do_plot
+                    disp(ic1.fqfn)
+                    imagesc(ic1)
+                end
+
+                duration = toc;
+            catch ME
+                handwarning(ME)
             end
         end
 
         function ic = build_schaeffer_finite(nmaf, opts)
-            %% use with build_schaeffer_parc
+            %% Use with build_schaeffer_parc.
+            %  Combines delays.
+            %  Removes empty dynamic frames.
 
             arguments
                 nmaf {mustBeText}
                 opts.noclobber logical = true
+                opts.do_save logical = true
             end
 
             ic = [];
@@ -271,10 +296,13 @@ classdef Lee2025 < handle & mlsystem.IHandle
                     return
                 end
 
+                % call base_case; save
                 if isfile(nmaf)
                     ic = base_case(nmaf);
                     ic.fqfn = fqfn_final;
-                    ic.save();
+                    if opts.do_save
+                        ic.save();
+                    end
                     return
                 end
                 if contains(nmaf, "*")
@@ -290,7 +318,9 @@ classdef Lee2025 < handle & mlsystem.IHandle
                         ic = ic.timeAppend(ics(iidx), concat_json_fields=true);
                     end
                     ic.fqfn = fqfn_final;
-                    ic.save();
+                    if opts.do_save
+                        ic.save();
+                    end
                     return
                 end
             catch ME
@@ -743,7 +773,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             subpth = extractBefore(fileparts(other_nii), filesep + "ses-");
             subpth = strrep(subpth, "sourcedata", "derivatives");
-            globbed = mglob(fullfile(subpth, "ses-*", "anat", "sub-*_ses-*_T1w_MPR_vNav_4e_RMS_orient-std.nii.gz"));
+            globbed = mglob(fullfile(subpth, "ses-*", "anat", "sub-*_ses-*_T1w_MPR_vNav_4e_RMS*_orient-std.nii.gz"));
             assert(~isempty(globbed))
             assert(isscalar(globbed))
             fqfn = globbed;
