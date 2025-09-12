@@ -84,6 +84,7 @@ classdef CHPC3
             end
 
             setenv('DEBUG_SETENVS', '1')
+            setenv('FSLDIR', '/scratch/jjlee/fsl')
         end
     end
     

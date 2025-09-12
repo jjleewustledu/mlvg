@@ -674,11 +674,11 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             arguments
                 globbing_mat {mustBeFile} = ...
                     fullfile( ...
-                    getenv("SINGULARITY_HOME"), "CCIR_01211", "srcdata_fdg.mat")
-                opts.globbing_var = "globbed"
+                    getenv("SINGULARITY_HOME"), "CCIR_01211", "test_fdg.mat")
+                opts.globbing_var = "test_fdg"
                 opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
                 opts.Ncol {mustBeInteger} = 1
-                opts.method {mustBeTextScalar} = "srcdata_fdg"
+                opts.method {mustBeTextScalar} = "do_make_input_func"
                 opts.reference_tracer {mustBeTextScalar} = "fdg"
                 opts.steps {mustBeNumericOrLogical} = 1
                 opts.account {mustBeTextScalar} = "manu_goyal"
@@ -791,8 +791,8 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
             arguments
                 globbing_mat {mustBeFile} = ...
-                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_fdg_todo.mat")
-                opts.globbing_var = "srcdata_fdg_todo"
+                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_ho_todo.mat")
+                opts.globbing_var = "srcdata_todo"
                 opts.selection_indices double = []
                 opts.Ncol {mustBeInteger} = 4
                 opts.account {mustBeTextScalar} = "manu_goyal"
