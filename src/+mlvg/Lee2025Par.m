@@ -674,16 +674,16 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             arguments
                 globbing_mat {mustBeFile} = ...
                     fullfile( ...
-                    getenv("SINGULARITY_HOME"), "CCIR_01211", "test_fdg.mat")
-                opts.globbing_var = "test_fdg"
-                opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
-                opts.Ncol {mustBeInteger} = 1
+                    getenv("SINGULARITY_HOME"), "CCIR_01211", "srcdata_fdg.mat")
+                opts.globbing_var = "srcdata_fdg"
+                opts.selection_indices double = [1, 3:78]  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
+                opts.Ncol {mustBeInteger} = 4
                 opts.method {mustBeTextScalar} = "do_make_input_func"
                 opts.reference_tracer {mustBeTextScalar} = "fdg"
                 opts.steps {mustBeNumericOrLogical} = 1
                 opts.account {mustBeTextScalar} = "manu_goyal"
             end
-            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='128gb', walltime='12:00:00');
+            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='128gb', walltime='3:00:00');
             disp(c.AdditionalProperties)
             ld = load(globbing_mat);
             globbed = convertCharsToStrings(ld.(opts.globbing_var));
