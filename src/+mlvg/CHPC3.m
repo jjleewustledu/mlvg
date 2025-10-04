@@ -85,6 +85,9 @@ classdef CHPC3
 
             setenv('DEBUG_SETENVS', '1')
             setenv('FSLDIR', '/scratch/jjlee/fsl')
+            setenv('TMPDIR', '/scratch/jjlee/tmp')
+            setenv('APPTAINER_HOME', '/scratch/jjlee/Singularity')
+            setenv('SINGULARITY_HOME', '/scratch/jjlee/Singularity')
         end
     end
     

@@ -578,7 +578,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             disp(size(globbed))
             disp(ascol(globbed))
 
-            % contact cluster slurm
+            %% contact cluster slurm
 
             c = mlvg.CHPC3.propcluster(opts.account, mempercpu='16gb', walltime='0:10:00');
             disp(c)
@@ -604,11 +604,14 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             arguments
                 globbing_mat {mustBeFile} = ...
                     fullfile( ...
-                    getenv("SINGULARITY_HOME"), "CCIR_01211", "mlvg_Lee2025Par_globbing_co.mat")
-                opts.globbing_var = "globbed"
+                    getenv("SINGULARITY_HOME"), "CCIR_01211", "srcdata_co.mat")
+                opts.globbing_var = ""
                 opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
-                opts.Ncol {mustBeInteger} = 4
+                opts.Ncol {mustBeInteger} = 5
                 opts.account {mustBeTextScalar} = "manu_goyal"
+            end
+            if isemptytext(opts.globbing_var)
+                opts.globbing_var = mybasename(globbing_mat);
             end
             ld = load(globbing_mat);
             globbed = convertCharsToStrings(ld.(opts.globbing_var));
@@ -618,21 +621,11 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             end
             is_delayed = contains(globbed(1), "-delay");
             if contains(globbing_mat, "co", IgnoreCase=true)
-                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='128gb', walltime='12:00:00');
-                opts.Ncol = 2;
+                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='6:00:00');
             elseif contains(globbing_mat, "fdg", IgnoreCase=true)
-                if ~is_delayed
-                    c = mlvg.CHPC3.propcluster(opts.account, mempercpu='128gb', walltime='12:00:00');
-                    opts.Ncol = 2;
-                else
-                    c = mlvg.CHPC3.propcluster(opts.account, mempercpu='16gb', walltime='2:00:00');
-                end
+                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='6:00:00');  % fdg delay0 is 69GB uncompressed
             else
-                if ~is_delayed
-                    c = mlvg.CHPC3.propcluster(opts.account, mempercpu='64gb', walltime='12:00:00');
-                else
-                    c = mlvg.CHPC3.propcluster(opts.account, mempercpu='16gb', walltime='1:00:00');
-                end
+                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='6:00:00');
             end
 
             % pad and reshape globbed
@@ -644,7 +637,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             disp(size(globbed))
             disp(ascol(globbed))
 
-            % contact cluster slurm
+            %% contact cluster slurm
 
             warning('off', 'MATLAB:legacy:batchSyntax');
             warning('off', 'parallel:convenience:BatchFunctionNestedCellArray');
@@ -668,6 +661,69 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             [msg,id] = lastwarn();
         end
 
+        function [j,c,msg,id] = cluster_build_mip_idif_finite(globbing_mat, opts)
+            %% for clusters running Matlab parallel server
+
+            arguments
+                globbing_mat {mustBeFile} = ...
+                    fullfile( ...
+                    getenv("SINGULARITY_HOME"), "CCIR_01211", "srcdata_co.mat")
+                opts.globbing_var = ""
+                opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
+                opts.Ncol {mustBeInteger} = 5
+                opts.account {mustBeTextScalar} = "manu_goyal"
+            end
+            if isemptytext(opts.globbing_var)
+                opts.globbing_var = mybasename(globbing_mat);
+            end
+            ld = load(globbing_mat);
+            globbed = convertCharsToStrings(ld.(opts.globbing_var));
+            globbed = asrow(globbed);
+            if ~isempty(opts.selection_indices)
+                globbed = globbed(opts.selection_indices);
+            end
+            is_delayed = contains(globbed(1), "-delay");
+            if contains(globbing_mat, "co", IgnoreCase=true)
+                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='6:00:00');
+            elseif contains(globbing_mat, "fdg", IgnoreCase=true)
+                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='6:00:00');
+            else
+                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='6:00:00');
+            end
+
+            % pad and reshape globbed
+            Nrow = ceil(numel(globbed)/opts.Ncol);
+            padding = repmat("", [1, opts.Ncol*Nrow - numel(globbed)]);
+            globbed = [globbed, padding];
+            globbed = reshape(globbed, Nrow, opts.Ncol);
+            fprintf("%s:globbed:\n", stackstr())
+            disp(size(globbed))
+            disp(ascol(globbed))
+
+            %% contact cluster slurm
+
+            warning('off', 'MATLAB:legacy:batchSyntax');
+            warning('off', 'parallel:convenience:BatchFunctionNestedCellArray');
+            warning('off', 'MATLAB:TooManyInputs');
+
+            disp(c.AdditionalProperties)
+            for irow = 1:Nrow
+                try
+                    j = c.batch( ...
+                        @mlvg.Lee2025Par.par_build_mip_idif_finite, ...
+                        1, ...
+                        {globbed(irow, :)}, ...
+                        'Pool', opts.Ncol, ...
+                        'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
+                        'AutoAddClientPath', false);
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            [msg,id] = lastwarn();
+        end
+
         function [j,c,msg,id] = cluster_call(globbing_mat, opts)
             %% for clusters running Matlab parallel server
 
@@ -676,14 +732,15 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                     fullfile( ...
                     getenv("SINGULARITY_HOME"), "CCIR_01211", "srcdata_fdg.mat")
                 opts.globbing_var = "srcdata_fdg"
-                opts.selection_indices double = [1, 3:78]  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
-                opts.Ncol {mustBeInteger} = 4
+                opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
+                opts.Ncol {mustBeInteger} = 5
+                opts.out_dir {mustBeTextScalar} = "/scratch/jjlee/Singularity/CCIR_01211"
                 opts.method {mustBeTextScalar} = "do_make_input_func"
                 opts.reference_tracer {mustBeTextScalar} = "fdg"
                 opts.steps {mustBeNumericOrLogical} = 1
                 opts.account {mustBeTextScalar} = "manu_goyal"
             end
-            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='128gb', walltime='3:00:00');
+            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='3:00:00');
             disp(c.AdditionalProperties)
             ld = load(globbing_mat);
             globbed = convertCharsToStrings(ld.(opts.globbing_var));
@@ -713,6 +770,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                         @mlvg.Lee2025Par.par_call_ifk, ...
                         1, ...
                         {globbed(irow, :), ...
+                        'out_dir', opts.out_dir, ...
                         'method', opts.method, 'steps', opts.steps, 'reference_tracer', opts.reference_tracer}, ...
                         'Pool', opts.Ncol, ...
                         'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
@@ -725,18 +783,223 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             [msg,id] = lastwarn();
         end
 
-        function [j,c,msg,id] = cluster_time_align_static(globbing_mat, opts)
+        function [j,c,msg,id] = cluster_construct_pet_avgt(globbing_mat, opts)
+            %% for clusters running Matlab parallel server
+
+            arguments
+                globbing_mat {mustBeFile} = ...
+                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_ho.mat")
+                opts.globbing_var = "srcdata_ho"
+                opts.selection_indices double = []
+                opts.Ncol {mustBeInteger} = 8
+                opts.out_dir {mustBeTextScalar} = "/scratch/jjlee/Singularity/CCIR_01211"
+                opts.account {mustBeTextScalar} = "aristeidis_sotiras"
+            end
+            ld = load(globbing_mat);
+            globbed = convertCharsToStrings(ld.(opts.globbing_var));
+            globbed = asrow(globbed);
+            if ~isempty(opts.selection_indices)
+                globbed = globbed(opts.selection_indices);
+            end
+
+            % pad and reshape globbed
+            Nrow = ceil(numel(globbed)/opts.Ncol);
+            padding = repmat("", [1, opts.Ncol*Nrow - numel(globbed)]);
+            globbed = [globbed, padding];
+            globbed = reshape(globbed, Nrow, opts.Ncol);
+            fprintf("%s:globbed:\n", stackstr())
+            disp(size(globbed))
+            disp(ascol(globbed))
+
+            % contact cluster slurm
+            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='4:00:00');
+            disp(c.AdditionalProperties)
+            for irow = 1:Nrow
+                try
+                    j = c.batch( ...
+                        @mlvg.Lee2025Par.par_construct_pet_avgt, ...
+                        1, ...
+                        {globbed(irow, :), ...
+                        'out_dir', opts.out_dir}, ...
+                        'Pool', opts.Ncol, ...
+                        'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
+                        'AutoAddClientPath', false);
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            [msg,id] = lastwarn();
+        end
+
+        function [j,c,msg,id] = cluster_construct_pet_mipt(globbing_mat, opts)
+            %% for clusters running Matlab parallel server
+
+            arguments
+                globbing_mat {mustBeFile} = ...
+                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_fdg_missing_mipts.mat")
+                opts.globbing_var = "srcdata_fdg_missing_mipts"
+                opts.selection_indices double = []
+                opts.Ncol {mustBeInteger} = 5
+                opts.out_dir {mustBeTextScalar} = "/scratch/jjlee/Singularity/CCIR_01211"
+                opts.account {mustBeTextScalar} = "manu_goyal"
+            end
+            ld = load(globbing_mat);
+            globbed = convertCharsToStrings(ld.(opts.globbing_var));
+            globbed = asrow(globbed);
+            if ~isempty(opts.selection_indices)
+                globbed = globbed(opts.selection_indices);
+            end
+
+            % pad and reshape globbed
+            Nrow = ceil(numel(globbed)/opts.Ncol);
+            padding = repmat("", [1, opts.Ncol*Nrow - numel(globbed)]);
+            globbed = [globbed, padding];
+            globbed = reshape(globbed, Nrow, opts.Ncol);
+            fprintf("%s:globbed:\n", stackstr())
+            disp(size(globbed))
+            disp(ascol(globbed))
+
+            % contact cluster slurm
+            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='4:00:00');
+            disp(c.AdditionalProperties)
+            for irow = 1:Nrow
+                try
+                    j = c.batch( ...
+                        @mlvg.Lee2025Par.par_construct_pet_mipt, ...
+                        1, ...
+                        {globbed(irow, :), ...
+                        'out_dir', opts.out_dir}, ...
+                        'Pool', opts.Ncol, ...
+                        'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
+                        'AutoAddClientPath', false);
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            [msg,id] = lastwarn();
+        end
+
+        function [j,c,msg,id] = cluster_deepmrseg_apply(globbing_mat, opts)
+
+            arguments
+                globbing_mat {mustBeFile} = ...
+                    fullfile( ...
+                    getenv("HOME"), ...
+                    "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "derivs_t1w_os.mat")
+                opts.globbing_var = ""
+                opts.out_dir {mustBeTextScalar} = "/scratch/jjlee/Singularity/CCIR_01211"
+                opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo, 1:57 for fdg
+                opts.Ncol {mustBeInteger} = 22
+                opts.account {mustBeTextScalar} = "aristeidis_sotiras"
+            end
+            if isemptytext(opts.globbing_var)
+                opts.globbing_var = mybasename(globbing_mat);
+            end
+            ld = load(globbing_mat);
+            globbed = convertCharsToStrings(ld.(opts.globbing_var));
+            if ~startsWith(globbed(1), opts.out_dir)
+                globbed = fullfile(opts.out_dir, globbed);
+            end
+            globbed = asrow(globbed);
+            if ~isempty(opts.selection_indices)
+                globbed = globbed(opts.selection_indices);
+            end
+            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='3:00:00');
+
+            % pad and reshape globbed
+            Nrow = ceil(numel(globbed)/opts.Ncol);
+            padding = repmat("", [1, opts.Ncol*Nrow - numel(globbed)]);
+            globbed = [globbed, padding];
+            globbed = reshape(globbed, Nrow, opts.Ncol);
+            fprintf("%s:globbed:\n", stackstr())
+            disp(size(globbed))
+            disp(ascol(globbed))
+
+            %% contact cluster slurm
+
+            disp(c.AdditionalProperties)
+            for irow = 1:Nrow
+                try
+                    j = c.batch( ...
+                        @mlvg.Lee2025Par.par_deepmrseg_apply, ...
+                        1, ...
+                        {globbed(irow, :)}, ...
+                        'Pool', opts.Ncol, ...
+                        'CurrentFolder', char(opts.out_dir), ...
+                        'AutoAddClientPath', false);
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            [msg,id] = lastwarn();
+        end
+
+        function [j,c,msg,id] = cluster_reflirt_t1w(globbing_mat, opts)
+            %% for clusters running Matlab parallel server
+
+            arguments
+                globbing_mat {mustBeFile} = ...
+                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_all_delay0.mat")
+                opts.globbing_var = "srcdata_all_delay0"
+                opts.noclobber logical = false
+                opts.selection_indices double = []
+                opts.Ncol {mustBeInteger} = 16
+                opts.out_dir {mustBeTextScalar} = "/scratch/jjlee/Singularity/CCIR_01211"
+                opts.account {mustBeTextScalar} = "aristeidis_sotiras"
+            end
+            ld = load(globbing_mat);
+            globbed = convertCharsToStrings(ld.(opts.globbing_var));
+            globbed = asrow(globbed);
+            if ~isempty(opts.selection_indices)
+                globbed = globbed(opts.selection_indices);
+            end
+
+            % pad and reshape globbed
+            Nrow = ceil(numel(globbed)/opts.Ncol);
+            padding = repmat("", [1, opts.Ncol*Nrow - numel(globbed)]);
+            globbed = [globbed, padding];
+            globbed = reshape(globbed, Nrow, opts.Ncol);
+            fprintf("%s:globbed:\n", stackstr())
+            disp(size(globbed))
+            disp(ascol(globbed))
+
+            % contact cluster slurm
+            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='16gb', walltime='4:00:00');
+            disp(c.AdditionalProperties)
+            for irow = 1:Nrow
+                try
+                    j = c.batch( ...
+                        @mlvg.Lee2025Par.par_reflirt_t1w, ...
+                        1, ...
+                        {globbed(irow, :), ...
+                        'out_dir', opts.out_dir, 'noclobber', opts.noclobber}, ...
+                        'Pool', opts.Ncol, ...
+                        'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
+                        'AutoAddClientPath', false);
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            [msg,id] = lastwarn();
+        end
+
+        function [j,c,msg,id] = cluster_time_align(globbing_mat, opts)
             %% for clusters running Matlab parallel server
 
             arguments
                 globbing_mat {mustBeFile} = ...
                     fullfile( ...
                     getenv("HOME"), ...
-                    "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "mlvg_Lee2025Par_globbing_fdg.mat")
-                opts.globbing_var = "globbed"
-                opts.selection_indices double = 1:4  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo, 1:57 for fdg
-                opts.Ncol {mustBeInteger} = 4
-                opts.account {mustBeTextScalar} = "manu_goyal"
+                    "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_fdg_delay0.mat")
+                opts.globbing_var = "srcdata_fdg_delay0"
+                opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
+                opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo, 1:57 for fdg
+                opts.Ncol {mustBeInteger} = 8
+                opts.account {mustBeTextScalar} = "aristeidis_sotiras"
             end
             ld = load(globbing_mat);
             globbed = convertCharsToStrings(ld.(opts.globbing_var));
@@ -772,9 +1035,9 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             for irow = 1:Nrow
                 try
                     j = c.batch( ...
-                        @mlvg.Lee2025Par.par_time_align_static, ...
+                        @mlvg.Lee2025Par.par_time_align, ...
                         1, ...
-                        {globbed(irow, :), "M", opts.Ncol}, ...
+                        {globbed(irow, :), "M", opts.Ncol, "out_dir", opts.out_dir}, ...
                         'Pool', opts.Ncol, ...
                         'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
                         'AutoAddClientPath', false);
@@ -786,51 +1049,68 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             [msg,id] = lastwarn();
         end
 
-        function [j,c,msg,id] = cluster_reflirt_t1w(globbing_mat, opts)
-            %% for clusters running Matlab parallel server
-
+        function durations = par_align_delayed_static(nii, opts)
             arguments
-                globbing_mat {mustBeFile} = ...
-                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_ho_todo.mat")
-                opts.globbing_var = "srcdata_todo"
-                opts.selection_indices double = []
-                opts.Ncol {mustBeInteger} = 4
-                opts.account {mustBeTextScalar} = "manu_goyal"
+                nii {mustBeText} = "sourcedata/sub-108007/ses-20210219143132/pet/sub-108007_ses-20210219143132_trc-oo_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
+                opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
             end
-            ld = load(globbing_mat);
-            globbed = convertCharsToStrings(ld.(opts.globbing_var));
-            globbed = asrow(globbed);
-            if ~isempty(opts.selection_indices)
-                globbed = globbed(opts.selection_indices);
-            end
+            
+            nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells
+            durations = nan(1, length(nii));
 
-            % pad and reshape globbed
-            Nrow = ceil(numel(globbed)/opts.Ncol);
-            padding = repmat("", [1, opts.Ncol*Nrow - numel(globbed)]);
-            globbed = [globbed, padding];
-            globbed = reshape(globbed, Nrow, opts.Ncol);
-            fprintf("%s:globbed:\n", stackstr())
-            disp(size(globbed))
-            disp(ascol(globbed))
+            parfor sidx = 1:length(nii)
 
-            % contact cluster slurm
-            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='128gb', walltime='4:00:00');
-            disp(c.AdditionalProperties)
-            for irow = 1:Nrow
+                tic;
+            
+                % setup
+                mlvg.CHPC3.setenvs();
+
                 try
-                    j = c.batch( ...
-                        @mlvg.Lee2025Par.par_reflirt_t1w, ...
-                        1, ...
-                        {globbed(irow, :)}, ...
-                        'Pool', opts.Ncol, ...
-                        'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
-                        'AutoAddClientPath', false);
+                    nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
+                    mlvg.Lee2025.flirt_t1w(nii_fqfn); 
                 catch ME
                     handwarning(ME)
                 end
+
+                durations(sidx) = toc;
+            end
+        end
+        
+        function durations = par_build_all(fqfns, opts)
+            %% constructs all de novo
+            
+            arguments
+                fqfns {mustBeText}
+                opts.noclobber logical = true
             end
 
-            [msg,id] = lastwarn();
+            durations = nan(1, length(fqfns));
+            
+            if isscalar(fqfns)
+                try
+                    % setup
+                    mlvg.CHPC3.setenvs();
+
+                    tic;
+                    mlvg.Lee2025.build_all(fqfns(1), noclobber=opts.noclobber);
+                    durations = toc;
+                catch ME
+                    handwarning(ME)
+                end
+            else
+                parfor (fidx = 1:length(fqfns), length(fqfns))
+                    try
+                        % setup
+                        mlvg.CHPC3.setenvs();
+
+                        tic;
+                        mlvg.Lee2025.build_all(fqfns(fidx), noclobber=opts.noclobber);
+                        durations(fidx) = toc;
+                    catch ME
+                        handwarning(ME)
+                    end
+                end
+            end
         end
 
         function durations = par_build_schaeffer_parc(fqfns, opts)
@@ -842,9 +1122,11 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             arguments
                 fqfns {mustBeText}
                 opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
-                opts.M {mustBeScalarOrEmpty} = 4  % 8
+                opts.M {mustBeScalarOrEmpty} = []
                 opts.select {mustBeInteger} = 1
-                opts.do_make_finite logical = false
+            end
+            if isempty(opts.M)
+                opts.M = length(fqfns);
             end
             if ~contains(fqfns(1), opts.out_dir)
                 fqfns = fullfile(opts.out_dir, fqfns);
@@ -860,9 +1142,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                     mlvg.CHPC3.setenvs();
 
                     fqfn = fqfns(1);
-                    durations = mlvg.Lee2025Par.build_schaeffer_parc( ...
-                        fqfn, ...
-                        out_dir=opts.out_dir, do_make_finite=opts.do_make_finite);
+                    durations = mlvg.Lee2025Par.build_schaeffer_parc(fqfn);
                 catch ME
                     handwarning(ME)
                 end
@@ -873,9 +1153,56 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                         mlvg.CHPC3.setenvs();
 
                         fqfn = fqfns(fidx);
-                        durations(fidx) = mlvg.Lee2025Par.build_schaeffer_parc( ...
-                            fqfn, ...
-                            out_dir=opts.out_dir, do_make_finite=opts.do_make_finite); %#ok<PFBNS>
+                        durations(fidx) = mlvg.Lee2025Par.build_schaeffer_parc(fqfn); %#ok<PFBNS>
+                    catch ME
+                        handwarning(ME)
+                    end
+                end
+            end
+        end
+
+        function durations = par_build_mip_idif_finite(fqfns, opts)
+            %% e.g.,
+            %  sub-108306_ses-20230227113853_trc-ho_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz ->
+            %  sub-108306_ses-20230227113853_trc-ho_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames-ParcSchaeffer-reshape-to-schaeffer-schaeffer.nii.gz
+            %  for OO, uses 70 GB of memory per parallel process
+
+            arguments
+                fqfns {mustBeText}
+                opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
+                opts.M {mustBeScalarOrEmpty} = []
+                opts.select {mustBeInteger} = 1
+                opts.do_make_finite logical = false
+            end
+            if isempty(opts.M)
+                opts.M = length(fqfns);
+            end
+            if ~contains(fqfns(1), opts.out_dir)
+                fqfns = fullfile(opts.out_dir, fqfns);
+            end
+
+            import mlkinetics.*
+
+            durations = nan(1, length(fqfns));
+            
+            if isscalar(fqfns)
+                try
+                    % setup
+                    mlvg.CHPC3.setenvs();
+
+                    fqfn = fqfns(1);
+                    durations = mlvg.Lee2025Par.build_mip_idif_finite(fqfn);
+                catch ME
+                    handwarning(ME)
+                end
+            else
+                parfor (fidx = 1:length(fqfns), opts.M)
+                    try
+                        % setup
+                        mlvg.CHPC3.setenvs();
+
+                        fqfn = fqfns(fidx);
+                        durations(fidx) = mlvg.Lee2025Par.build_mip_idif_finite(fqfn);
                     catch ME
                         handwarning(ME)
                     end
@@ -885,17 +1212,21 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
         function durations = par_call_ifk(nii, opts)
             arguments
-                nii {mustBeText} = "sourcedata/sub-108007/ses-20210219145054/pet/sub-108007_ses-20210219145054_trc-ho_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
-                opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
+                nii {mustBeText} = "sourcedata/sub-108014/ses-20220718114454/pet/sub-108014_ses-20220718114454_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz" 
+                opts.out_dir {mustBeFolder} = "~/mnt/CHPC_scratch/Singularity/CCIR_01211"
                 opts.method {mustBeTextScalar} = "do_make_input_func"
                 opts.reference_tracer {mustBeTextScalar} = "fdg"
                 opts.steps {mustBeNumericOrLogical} = 1
+                opts.M {mustBeNumeric} = []
+            end
+            if isempty(opts.M)
+                opts.M = length(nii);
             end
             
             nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells
             durations = nan(1, length(nii));
 
-            parfor sidx = 1:length(nii)
+            parfor (sidx = 1:length(nii), opts.M)
 
                 tic;
             
@@ -926,11 +1257,167 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             end
         end
 
-        function durations = par_time_align_static(nii, opts)
+        function durations = par_construct_pet_avgt(nii, opts)
+            arguments
+                nii {mustBeText} = "srcdata_ho.mat"
+                opts.out_dir {mustBeFolder} = "/scratch/CHPC_scratch/Singularity/CCIR_01211"
+                opts.M {mustBeNumeric} = []
+                opts.globbing_var {mustBeTextScalar} = "srcdata_ho"
+                opts.noclobber logical = true
+            end
+            nii = convertCharsToStrings(nii);
+            opts.out_dir = convertCharsToStrings(opts.out_dir);
+            if isscalar(nii) && endsWith(nii, ".mat")
+                ld = load(fullfile(opts.out_dir, nii));
+                nii = ld.(opts.globbing_var);
+            end
+            if isempty(opts.M)
+                opts.M = length(nii);
+            end
+            
+            nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells, strings
+            durations = nan(1, length(nii));
+
+            parfor (sidx = 1:length(nii), opts.M)
+
+                tic;
+            
+                % setup
+                mlvg.CHPC3.setenvs();
+
+                try
+                    nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
+                    mlvg.Lee2025.construct_pet_avgt(nii_fqfn, noclobber=opts.noclobber);
+                catch ME
+                    handwarning(ME)
+                end
+
+                durations(sidx) = toc;
+            end
+        end
+
+        function durations = par_construct_pet_mipt(nii, opts)
+            arguments
+                nii {mustBeText} = "srcdata_fdg_missing_mipt.mat"
+                opts.out_dir {mustBeFolder} = "/scratch/CHPC_scratch/Singularity/CCIR_01211"
+                opts.M {mustBeNumeric} = []
+                opts.globbing_var {mustBeTextScalar} = "srcdata_fdg_missing_mipt"
+                opts.noclobber logical = true
+            end
+            nii = convertCharsToStrings(nii);
+            opts.out_dir = convertCharsToStrings(opts.out_dir);
+            if isscalar(nii) && endsWith(nii, ".mat")
+                ld = load(fullfile(opts.out_dir, nii));
+                nii = ld.(opts.globbing_var);
+            end
+            if isempty(opts.M)
+                opts.M = length(nii);
+            end
+            
+            nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells, strings
+            durations = nan(1, length(nii));
+
+            parfor (sidx = 1:length(nii), opts.M)
+
+                tic;
+            
+                % setup
+                mlvg.CHPC3.setenvs();
+
+                try
+                    nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
+                    mlvg.Lee2025.construct_pet_mipt(nii_fqfn, noclobber=opts.noclobber);
+                catch ME
+                    handwarning(ME)
+                end
+
+                durations(sidx) = toc;
+            end
+        end
+
+        function durations = par_deepmrseg_apply(fqfns)
+            %% constructs DLICV for T1w
+
+            arguments
+                fqfns {mustBeText}
+            end
+
+            durations = nan(1, length(fqfns));
+            
+            if isscalar(fqfns)
+                try
+                    % setup
+                    mlvg.CHPC3.setenvs();
+
+                    tic;
+                    mlvg.Lee2025.deepmrseg_apply(fqfns(1));
+                    durations = toc;
+                catch ME
+                    handwarning(ME)
+                end
+            else
+                parfor (fidx = 1:length(fqfns), length(fqfns))
+                    try
+                        % setup
+                        mlvg.CHPC3.setenvs();
+
+                        tic;
+                        mlvg.Lee2025.deepmrseg_apply(fqfns(fidx));
+                        durations(fidx) = toc;
+                    catch ME
+                        handwarning(ME)
+                    end
+                end
+            end
+        end
+
+        function durations = par_reflirt_t1w(nii, opts)
+            arguments
+                nii {mustBeText} = "srcdata_fdg.mat"
+                opts.out_dir {mustBeFolder} = "~/mnt/CHPC_scratch/Singularity/CCIR_01211"
+                opts.M {mustBeNumeric} = []
+                opts.globbing_var {mustBeTextScalar} = "srcdata_fdg"
+                opts.specialize_for_tracer logical = true
+                opts.noclobber logical = false
+            end
+            if endsWith(nii, ".mat")
+                ld = load(fullfile(opts.out_dir, nii));
+                nii = ld.(opts.globbing_var);
+            end
+            if isempty(opts.M)
+                opts.M = length(nii);
+            end
+            
+            nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells, strings
+            durations = nan(1, length(nii));
+
+            parfor (sidx = 1:length(nii), opts.M)
+
+                tic;
+            
+                % setup
+                mlvg.CHPC3.setenvs();
+
+                try
+                    nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
+                    mlvg.Lee2025.flirt_t1w(nii_fqfn, ...
+                        specialize_for_tracer=opts.specialize_for_tracer, noclobber=opts.noclobber);
+                catch ME
+                    handwarning(ME)
+                end
+
+                durations(sidx) = toc;
+            end
+        end
+
+        function durations = par_time_align(nii, opts)
             arguments
                 nii {mustBeText} = "sourcedata/sub-108007/ses-20210219143132/pet/sub-108007_ses-20210219143132_trc-oo_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
-                opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
-                opts.M {mustBeInteger} = 8
+                opts.out_dir {mustBeFolder} = "/home/usr/jjlee/mnt/CHPC_scratch/Singularity/CCIR_01211"
+                opts.M {mustBeNumeric} = []
+            end
+            if isempty(opts.M)
+                opts.M = length(nii);
             end
             
             nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells
@@ -947,7 +1434,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                     try
                         nii_fqfn = fullfile(opts.out_dir, nii(sidx)); 
                         globbed = mglob(strrep(nii_fqfn, "delay0", "delay*"));
-                        mlvg.Lee2025.time_align_static(globbed);
+                        mlvg.Lee2025.time_align(globbed);
                     catch ME
                         handwarning(ME)
                     end
@@ -975,21 +1462,20 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                 durations(sidx) = toc;
             end
         end
-
-        function durations = par_reflirt_t1w(nii, opts)
+        
+        function durations = serial_call_ifk(nii, opts)
             arguments
-                nii {mustBeText} = "sourcedata/sub-108007/ses-20210219143132/pet/sub-108007_ses-20210219143132_trc-oo_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
-                opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
-                opts.M {mustBeNumeric} = []
-            end
-            if isempty(opts.M)
-                opts.M = length(nii);
+                nii {mustBeText} = "sourcedata/sub-108014/ses-20220718114454/pet/sub-108014_ses-20220718114454_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz" 
+                opts.out_dir {mustBeFolder} = "~/mnt/CHPC_scratch/Singularity/CCIR_01211"
+                opts.method {mustBeTextScalar} = "do_make_input_func"
+                opts.reference_tracer {mustBeTextScalar} = "fdg"
+                opts.steps {mustBeNumericOrLogical} = 1
             end
             
             nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells
             durations = nan(1, length(nii));
 
-            parfor (sidx = 1:length(nii), opts.M)
+            for sidx = 1:length(nii)
 
                 tic;
             
@@ -997,8 +1483,21 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                 mlvg.CHPC3.setenvs();
 
                 try
-                    nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
-                    mlvg.Lee2025.flirt_t1w(nii_fqfn); 
+                    % exclusions
+                    if 5 == opts.steps %#ok<PFBNS>
+                        fn = extractBefore(mybasename(nii(sidx)), "_proc") + "_proc-MipIdif_idif.nii.gz";
+                        target = fullfile(fileparts(nii(sidx)), fn);
+                        target = strrep(target, "sourcedata", "derivatives");
+                        if isfile(target)
+                            fprintf("%s: skipping existing %s\n", stackstr(), target);
+                            durations(sidx) = toc;
+                            continue
+                        end
+                    end
+
+                    % construct & call
+                    lp = mlvg.Lee2025Par(nii(sidx), out_dir=opts.out_dir); %#ok<PFBNS>
+                    call_ifk(lp, method=opts.method, steps=opts.steps, reference_tracer=opts.reference_tracer);
                 catch ME
                     handwarning(ME)
                 end
@@ -1006,34 +1505,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                 durations(sidx) = toc;
             end
         end
-
-        function durations = par_align_delayed_static(nii, opts)
-            arguments
-                nii {mustBeText} = "sourcedata/sub-108007/ses-20210219143132/pet/sub-108007_ses-20210219143132_trc-oo_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
-                opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
-            end
-            
-            nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells
-            durations = nan(1, length(nii));
-
-            parfor sidx = 1:length(nii)
-
-                tic;
-            
-                % setup
-                mlvg.CHPC3.setenvs();
-
-                try
-                    nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
-                    mlvg.Lee2025.flirt_t1w(nii_fqfn); 
-                catch ME
-                    handwarning(ME)
-                end
-
-                durations(sidx) = toc;
-            end
-        end
-    
+        
         function r = test_fsl(nii, opts)
             arguments
                 nii {mustBeText} = "sourcedata/sub-108007/ses-20210219143132/pet/sub-108007_ses-20210219143132_trc-oo_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
@@ -1048,6 +1520,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
                     % setup
                     mlvg.CHPC3.setenvs();
+                    result = "";
 
                     try
                         %[~, result] = system('env | sort');
@@ -1068,6 +1541,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
                 % setup
                 mlvg.CHPC3.setenvs();
+                result = "";
 
                 try
                     result = mysystem("fslhd " + nii(sidx));
