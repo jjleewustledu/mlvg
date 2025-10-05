@@ -23,7 +23,7 @@ classdef T4Resolve < handle & mlsystem.IHandle
             assert(isfile(g))
         end
         function g = get.t1w(this)
-            assert(contains(this.t1w_.fileprefix, "orient-std"))
+            assert(contains(this.t1w_.fileprefix, 'orient-std'))
             g = this.t1w_;
             assert(isfile(g))
         end
@@ -34,7 +34,7 @@ classdef T4Resolve < handle & mlsystem.IHandle
             end
 
             % read from filesystem
-            fqfn = this.t1w.fqfp + "_brain.nii.gz";
+            fqfn = strcat(this.t1w.fqfp, '_brain.nii.gz');
             if isfile(fqfn)
                 this.t1w_brain_ = mlfourd.ImagingContext2(fqfn);
                 g = this.t1w_brain_;
@@ -72,8 +72,8 @@ classdef T4Resolve < handle & mlsystem.IHandle
             g = this.t1w_dlicv_;
         end
         function g = get.t1w_on_pet(this)
-            filepath = strrep(this.pet.filepath, "sourcedata", "derivatives");
-            fqfn = fullfile(filepath, "T1w_on_" + this.pet.filename);
+            filepath = strrep(this.pet.filepath, 'sourcedata', 'derivatives');
+            fqfn = fullfile(filepath, strcat('T1w_on_', this.pet.filename));
             g = mlfourd.ImagingContext2(fqfn);
         end
     end
@@ -91,11 +91,16 @@ classdef T4Resolve < handle & mlsystem.IHandle
             end
             
             this.pet_ = mlfourd.ImagingContext2(opts.pet);
-            this.t1w_ = opts.t1w;
+            this.pet_.fqfn = convertStringsToChars(this.pet_.fqfn);
+            this.t1w_ = mlfourd.ImagingContext2(opts.t1w);
+            this.t1w_.fqfn = convertStringsToChars(this.t1w_.fqfn);
             assert(3 == ndims(this.pet_))
             this.atl_ = mlfourd.ImagingContext2(opts.atl);
             this.blur_ = opts.blur;
             this.debug = opts.debug;
+
+            %warning("off", "MATLAB:json:ExpectedNameOrEnd");
+            %warning("off", "MATLAB:json:ExpectedCommaOrEnd");
         end
 
         function this = flirt_t1w_to_pet(this, opts)
@@ -156,7 +161,12 @@ classdef T4Resolve < handle & mlsystem.IHandle
             
             % move files, write json
             movefile(this.niigz(t4rb.theImagesFinal{2}), this.niigz(this.t1w_on_pet));
-            movefile(this.json(t4rb.theImagesFinal{2}), this.json(this.t1w_on_pet));    
+            j = this.json(t4rb.theImagesFinal{2});
+            if isfile(j)
+                movefile(j, this.json(this.t1w_on_pet));
+            else
+                copyfile(this.json(this.t1w_brain), this.json(this.t1w_on_pet));
+            end
             this.jsonrecode( ...
                 this.t1w_on_pet, ...
                 struct('image_activity', this.image_mass(this.t1w_on_pet)), ...
@@ -236,7 +246,7 @@ classdef T4Resolve < handle & mlsystem.IHandle
 
     %% PRIVATE
 
-    properties
+    properties (Access = private)
         atl_
         blur_
         pet_

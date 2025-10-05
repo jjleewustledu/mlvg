@@ -987,6 +987,21 @@ classdef Lee2025 < handle & mlsystem.IHandle
             disp(badframes_co)
         end
 
+        function fqfn = find_fdg_static(other_nii)
+            %% e.g., sub-108334_ses-20241216113854_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz
+
+            arguments
+                other_nii {mustBeFile}
+            end
+
+            other_nii = strrep(other_nii, "sourcedata", "derivatives");
+            derivs_subpth = extractBefore(fileparts(other_nii), filesep + "ses-");
+            globbed = mglob(fullfile( ...
+                derivs_subpth, "ses-*", "pet", "sub-*_ses-*_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz"));
+            assert(isscalar(globbed) && ~isemptytext(globbed))
+            fqfn = globbed;
+        end
+
         function fqfn = find_fdg_mipt(other_nii)
             %% e.g., sub-108334_ses-20241216113854_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames_mipt.nii.gz
 
@@ -1049,7 +1064,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             arguments
                 other_nii {mustBeFile}
-                opts.tag {mustBeTextScalar} = "_b35"
+                opts.tag {mustBeTextScalar} = ""  % "_b35"
             end
 
             subpth = extractBefore(fileparts(other_nii), filesep + "ses-");
@@ -1139,9 +1154,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             arguments
                 fqfn {mustBeFile}
                 opts.specialize_for_tracer logical = true
-                opts.noclobber logical = true
-                opts.cost {mustBeTextScalar} = "normmi"
-                opts.use_dlicv logical = false
+                opts.noclobber logical = false
             end
 
             if contains(fqfn, "sub-108259_ses-20230731133714")
@@ -1150,54 +1163,26 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
             if opts.specialize_for_tracer
                 if contains(fqfn, "trc-ho")
-                    mlvg.Lee2025.flirt_t1w_on_ho(fqfn, noclobber=opts.noclobber, cost=opts.cost);
+                    mlvg.Lee2025.flirt_t1w_on_ho(fqfn, noclobber=opts.noclobber);
                     return
                 end
                 if contains(fqfn, "trc-co")
-                    mlvg.Lee2025.flirt_t1w_on_co(fqfn, noclobber=opts.noclobber, cost=opts.cost);
+                    mlvg.Lee2025.flirt_t1w_on_co(fqfn, noclobber=opts.noclobber);
                     return
                 end
                 if contains(fqfn, "trc-oo")
-                    mlvg.Lee2025.flirt_t1w_on_oo(fqfn, noclobber=opts.noclobber, cost=opts.cost);
+                    mlvg.Lee2025.flirt_t1w_on_oo(fqfn, noclobber=opts.noclobber);
                     return
                 end
             end
 
-            import mlvg.Lee2025.mat
-
             fqfn = strrep(fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
-
-            % flirt fdg_mipt -> co_mipt
+            if ~contains(fqfn, pwd)
+                fqfn = fullfile(pwd, fqfn);
+            end
             t1w_fqfn = mlvg.Lee2025.find_t1w(fqfn);
-            [pth,fp] = myfileparts(fqfn);
-            dlicv_fqfn = [];
-            if opts.use_dlicv
-                dlicv_glob = mglob(fullfile(fileparts(t1w_fqfn), "*_DLICV_b70.nii.gz"));
-                if ~isempty(dlicv_glob)
-                    dlicv_fqfn = dlicv_glob(1);
-                end
-            end
-            pth_derivs = strrep(pth, "sourcedata", "derivatives");
-            t1w_on_tracer = fullfile(pth_derivs, "T1w_on_" + fp + ".nii.gz");
-            flirt = mlfsl.Flirt( ...
-                'in', t1w_fqfn, ...
-                'inweight', dlicv_fqfn, ...
-                'ref', fqfn, ...
-                'out', t1w_on_tracer, ...
-                'omat', mat(t1w_on_tracer), ...
-                'bins', 4096, ...
-                'cost', opts.cost, ...
-                'searchrx', 20, ...
-                'searchry', 20, ...
-                'searchrz', 20, ...
-                'dof', 6, ...
-                'interp', 'spline', ...
-                'noclobber', false);
-            ensuredir(fileparts(t1w_on_tracer))
-            if ~opts.noclobber || ~isfile(t1w_on_tracer)
-                flirt.flirt();
-                assert(isfile(t1w_on_tracer))
-            end
+            t4r = mlvg.T4Resolve(pet=fqfn, t1w=t1w_fqfn);
+            t4r.resolve_t1w_to_pet(noclobber=opts.noclobber);
         end
 
         function flirt_t1w_on_co(co_fqfn, opts)
@@ -1207,54 +1192,36 @@ classdef Lee2025 < handle & mlsystem.IHandle
             arguments
                 co_fqfn {mustBeFile}
                 opts.noclobber logical = true
-                opts.cost {mustBeTextScalar} = "normmi"
             end
 
             co_fqfn = strrep(co_fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
             co_fqfn = strrep(co_fqfn, "consoleDynamic", "consoleStatic");
+            if ~contains(co_fqfn, pwd)
+                co_fqfn = fullfile(pwd, co_fqfn);
+            end
 
+            import mlvg.Lee2025.find_fdg_static
             import mlvg.Lee2025.find_fdg_mipt
             import mlvg.Lee2025.find_t1w
             import mlvg.Lee2025.find_t1w_on_fdg
-            import mlvg.Lee2025.mat
 
-            fdg_mipt = find_fdg_mipt(co_fqfn);
-            fdg_mipt_on_co = myfileprefix(fdg_mipt) + "_on_" + mybasename(co_fqfn) + ".nii.gz";
-
-            % flirt fdg_mipt -> co_mipt
-            flirt = mlfsl.Flirt( ...
-                'in', fdg_mipt, ...
-                'ref', co_fqfn, ...
-                'out', fdg_mipt_on_co, ...
-                'omat', mat(fdg_mipt_on_co), ...
-                'bins', 4096, ...
-                'cost', opts.cost, ...
-                'searchrx', 20, ...
-                'searchry', 20, ...
-                'searchrz', 20, ...
-                'dof', 6, ...
-                'interp', 'spline', ...
-                'noclobber', false);
-            if ~opts.noclobber || ~isfile(fdg_mipt_on_co)
-                flirt.flirt();
-            end
-            assert(isfile(mat(fdg_mipt_on_co)))
-
-            % concatXfm & applyXfm
-            t1w2fdg_xfm = mat(find_t1w_on_fdg(fdg_mipt));
-            src_pth = fileparts(co_fqfn);
-            derivs_pth = strrep(src_pth, "sourcedata", "derivatives");
-            t1w_on_co = fullfile(derivs_pth, "T1w_on_" + mybasename(co_fqfn, withext=true));
-            if isfile(t1w_on_co)
+            try
+                fdg_static = find_fdg_static(co_fqfn);
+                fdg_mipt = find_fdg_mipt(co_fqfn);
+                fdg_mipt_on_co = myfileprefix(fdg_mipt) + "_on_" + mybasename(co_fqfn) + ".nii.gz";
+                fdg_mipt_on_co = strrep(fdg_mipt_on_co, "sourcedata", "derivatives");
+            catch ME
+                % resort to specialize_for_tracer=false
+                fprintf("mlvg:RuntimeError: %s %s", stackstr(), ME.message);
+                mlvg.Lee2025.flirt_t1w(co_fqfn, noclobber=opts.noclobber, ...
+                    specialize_for_tracer=false);
                 return
             end
-            flirt.concatXfm(AtoB=t1w2fdg_xfm);
-            flirt.in = find_t1w(co_fqfn);
-            flirt.ref = co_fqfn;
-            flirt.out = t1w_on_co;
-            ensuredir(fileparts(t1w_on_co))
-            flirt.applyXfm();
-            assert(isfile(t1w_on_co))
+
+            % t1w -> fdg_mipt -> co
+            t1w_fqfn = mlvg.Lee2025.find_t1w(co_fqfn);
+            t4r = mlvg.T4Resolve(pet=co_fqfn, intermediary=fdg_mipt_on_co, t1w=t1w_fqfn);
+            t4r.resolve_t1w_to_intermed_to_pet(noclobber=opts.noclobber);
         end
 
         function flirt_t1w_on_ho(ho_fqfn, opts)
@@ -1265,46 +1232,16 @@ classdef Lee2025 < handle & mlsystem.IHandle
             arguments
                 ho_fqfn {mustBeFile}
                 opts.noclobber logical = true
-                opts.cost {mustBeTextScalar} = "normmi"
-                opts.use_dlicv logical = false
             end
-
-            import mlvg.Lee2025.mat
 
             ho_fqfn = strrep(ho_fqfn, "sourcedata", "derivatives");
             ho_fqfn = strrep(ho_fqfn, "createNiftiMovingAvgFrames", "createNiftiMovingAvgFrames_avgt");
-
-            % flirt fdg_mipt -> co_mipt
+            if ~contains(ho_fqfn, pwd)
+                ho_fqfn = fullfile(pwd, ho_fqfn);
+            end
             t1w_fqfn = mlvg.Lee2025.find_t1w(ho_fqfn);
-            [pth,fp] = myfileparts(ho_fqfn);
-            dlicv_fqfn = [];
-            if opts.use_dlicv
-                dlicv_glob = mglob(fullfile(fileparts(t1w_fqfn), "*_DLICV_b70.nii.gz"));
-                if ~isempty(dlicv_glob)
-                    dlicv_fqfn = dlicv_glob(1);
-                end
-            end
-            pth_derivs = strrep(pth, "sourcedata", "derivatives");
-            t1w_on_tracer = fullfile(pth_derivs, "T1w_on_" + fp + ".nii.gz");
-            flirt = mlfsl.Flirt( ...
-                'in', t1w_fqfn, ...
-                'inweight', dlicv_fqfn, ...
-                'ref', ho_fqfn, ...
-                'out', t1w_on_tracer, ...
-                'omat', mat(t1w_on_tracer), ...
-                'bins', 4096, ...
-                'cost', opts.cost, ...
-                'searchrx', 20, ...
-                'searchry', 20, ...
-                'searchrz', 20, ...
-                'dof', 6, ...
-                'interp', 'spline', ...
-                'noclobber', false);
-            ensuredir(fileparts(t1w_on_tracer))
-            if ~opts.noclobber || ~isfile(t1w_on_tracer)
-                flirt.flirt();
-                assert(isfile(t1w_on_tracer))
-            end
+            t4r = mlvg.T4Resolve(pet=ho_fqfn, t1w=t1w_fqfn);
+            t4r.resolve_t1w_to_pet(noclobber=opts.noclobber);
         end
 
         function flirt_t1w_on_oo(oo_fqfn, opts)
@@ -1315,58 +1252,33 @@ classdef Lee2025 < handle & mlsystem.IHandle
             arguments
                 oo_fqfn {mustBeFile}
                 opts.noclobber logical = true
-                opts.cost {mustBeTextScalar} = "normmi"
             end
 
             import mlvg.Lee2025.find_ho_avgt
             import mlvg.Lee2025.find_t1w
             import mlvg.Lee2025.find_t1w_on_ho
-            import mlvg.Lee2025.mat
 
             oo_fqfn = strrep(oo_fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
+            if ~contains(oo_fqfn, pwd)
+                oo_fqfn = fullfile(pwd, oo_fqfn);
+            end
 
             try
-                ho_avgt = mlvg.Lee2025.find_ho_avgt(oo_fqfn);
+                ho_avgt = find_ho_avgt(oo_fqfn);
                 ho_avgt_on_oo = myfileprefix(ho_avgt) + "_on_" + mybasename(oo_fqfn) + ".nii.gz";
                 ho_avgt_on_oo = strrep(ho_avgt_on_oo, "sourcedata", "derivatives");
             catch ME
+                % resort to specialize_for_tracer=false
                 fprintf("mlvg:RuntimeError: %s %s", stackstr(), ME.message);
-                mlvg.Lee2025.flirt_t1w(oo_fqfn, noclobber=opts.noclobber, cost=opts.cost, ...
+                mlvg.Lee2025.flirt_t1w(oo_fqfn, noclobber=opts.noclobber, ...
                     specialize_for_tracer=false);
                 return
             end
 
-            % flirt ho_avgt -> oo
-            flirt = mlfsl.Flirt( ...
-                'in', ho_avgt, ...
-                'ref', oo_fqfn, ...
-                'out', ho_avgt_on_oo, ...
-                'omat', mat(ho_avgt_on_oo), ...
-                'bins', 4096, ...
-                'cost', opts.cost, ...
-                'searchrx', 20, ...
-                'searchry', 20, ...
-                'searchrz', 20, ...
-                'dof', 6, ...
-                'interp', 'spline', ...
-                'noclobber', false);
-            if ~opts.noclobber || ~isfile(ho_avgt_on_oo)
-                flirt.flirt();
-                assert(isfile(ho_avgt_on_oo))
-            end
-
-            % concatXfm & applyXfm
-            t1w2ho_xfm = mat(find_t1w_on_ho(ho_avgt));
-            pth = fileparts(oo_fqfn);
-            pth = strrep(pth, "sourcedata", "derivatives");
-            t1w_on_oo = fullfile(pth, "T1w_on_" + mybasename(oo_fqfn, withext=true));
-            flirt.concatXfm(AtoB=t1w2ho_xfm);
-            flirt.in = find_t1w(oo_fqfn);
-            flirt.ref = oo_fqfn;
-            flirt.out = t1w_on_oo;
-            ensuredir(fileparts(t1w_on_oo))
-            flirt.applyXfm();
-            assert(isfile(t1w_on_oo))
+            % t1w -> ho_avgt -> oo
+            t1w_fqfn = mlvg.Lee2025.find_t1w(oo_fqfn);
+            t4r = mlvg.T4Resolve(pet=oo_fqfn, intermediary=ho_avgt, t1w=t1w_fqfn);
+            t4r.resolve_t1w_to_intermed_to_pet(noclobber=opts.noclobber);
         end
 
         function inspect_centerlines(folder, opts)
