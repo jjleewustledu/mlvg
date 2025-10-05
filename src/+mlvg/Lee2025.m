@@ -789,6 +789,17 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
         end
 
+        function fqfn1 = build_t1w_brain(other_nii)
+            t1w_fqfn = mlvg.Lee2025.find_t1w(other_nii);
+            t1w_ic = mlfourd.ImagingContext2(t1w_fqfn);
+            dlicv_fqfn = mlvg.Lee2025.find_t1w_dlicv(other_nii);
+            dlicv_ic = mlfourd.ImagingContext2(dlicv_fqfn);
+            ic = t1w_ic .* dlicv_ic;
+            fqfn1 = t1w_ic.fqfp + "_brain.nii.gz";
+            ic.fqfn = fqfn1;
+            ic.save();
+        end
+
         function fqfn1 = construct_pet_avgt(fqfn, opts)
             %% work-around for failures of this.call_ifk()
 
@@ -1049,13 +1060,30 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             arguments
                 other_nii {mustBeFile}
-                opts.tag {mustBeTextScalar} = "_b35"
+                opts.tag {mustBeTextScalar} = ""
             end
 
             subpth = extractBefore(fileparts(other_nii), filesep + "ses-");
             subpth = strrep(subpth, "sourcedata", "derivatives");
             globbed = mglob(fullfile(subpth, "ses-*", "anat", ...
                 sprintf("sub-*_ses-*_T1w_MPR_vNav_4e_RMS*_orient-std%s.nii.gz", opts.tag)));
+            assert(~isempty(globbed))
+            globbed = globbed(1);
+            fqfn = globbed;
+        end
+
+        function fqfn = find_t1w_dlicv(other_nii, opts)
+            %% e.g., sub-108333_ses-20241122094951_T1w_MPR_vNav_4e_RMS_orient-std_DLICV.nii.gz
+
+            arguments
+                other_nii {mustBeFile}
+                opts.tag {mustBeTextScalar} = ""
+            end
+
+            subpth = extractBefore(fileparts(other_nii), filesep + "ses-");
+            subpth = strrep(subpth, "sourcedata", "derivatives");
+            globbed = mglob(fullfile(subpth, "ses-*", "anat", ...
+                sprintf("sub-*_ses-*_T1w_MPR_vNav_4e_RMS*_orient-std_DLICV%s.nii.gz", opts.tag)));
             assert(~isempty(globbed))
             globbed = globbed(1);
             fqfn = globbed;
@@ -1139,9 +1167,9 @@ classdef Lee2025 < handle & mlsystem.IHandle
             arguments
                 fqfn {mustBeFile}
                 opts.specialize_for_tracer logical = true
-                opts.noclobber logical = true
+                opts.noclobber logical = false
                 opts.cost {mustBeTextScalar} = "normmi"
-                opts.use_dlicv logical = false
+                opts.use_dlicv logical = true
             end
 
             if contains(fqfn, "sub-108259_ses-20230731133714")
@@ -1164,15 +1192,17 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
 
             import mlvg.Lee2025.mat
+            import mlvg.Lee2025.find_t1w
+            import mlvg.Lee2025.build_t1w_brain
 
             fqfn = strrep(fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
 
-            % flirt fdg_mipt -> co_mipt
-            t1w_fqfn = mlvg.Lee2025.find_t1w(fqfn);
+            % flirt t1w -> pet
+            t1w_fqfn = build_t1w_brain(fqfn);
             [pth,fp] = myfileparts(fqfn);
             dlicv_fqfn = [];
             if opts.use_dlicv
-                dlicv_glob = mglob(fullfile(fileparts(t1w_fqfn), "*_DLICV_b70.nii.gz"));
+                dlicv_glob = mglob(fullfile(fileparts(t1w_fqfn), "*_DLICV.nii.gz"));
                 if ~isempty(dlicv_glob)
                     dlicv_fqfn = dlicv_glob(1);
                 end
@@ -1187,9 +1217,9 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 'omat', mat(t1w_on_tracer), ...
                 'bins', 4096, ...
                 'cost', opts.cost, ...
-                'searchrx', 20, ...
-                'searchry', 20, ...
-                'searchrz', 20, ...
+                'searchrx', 30, ...
+                'searchry', 30, ...
+                'searchrz', 30, ...
                 'dof', 6, ...
                 'interp', 'spline', ...
                 'noclobber', false);
@@ -1215,6 +1245,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             import mlvg.Lee2025.find_fdg_mipt
             import mlvg.Lee2025.find_t1w
+            import mlvg.Lee2025.build_t1w_brain
             import mlvg.Lee2025.find_t1w_on_fdg
             import mlvg.Lee2025.mat
 
@@ -1229,9 +1260,9 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 'omat', mat(fdg_mipt_on_co), ...
                 'bins', 4096, ...
                 'cost', opts.cost, ...
-                'searchrx', 20, ...
-                'searchry', 20, ...
-                'searchrz', 20, ...
+                'searchrx', 30, ...
+                'searchry', 30, ...
+                'searchrz', 30, ...
                 'dof', 6, ...
                 'interp', 'spline', ...
                 'noclobber', false);
@@ -1270,16 +1301,18 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
 
             import mlvg.Lee2025.mat
+            import mlvg.Lee2025.find_t1w
+            import mlvg.Lee2025.build_t1w_brain
 
             ho_fqfn = strrep(ho_fqfn, "sourcedata", "derivatives");
             ho_fqfn = strrep(ho_fqfn, "createNiftiMovingAvgFrames", "createNiftiMovingAvgFrames_avgt");
 
             % flirt fdg_mipt -> co_mipt
-            t1w_fqfn = mlvg.Lee2025.find_t1w(ho_fqfn);
+            t1w_fqfn = build_t1w_brain(ho_fqfn);
             [pth,fp] = myfileparts(ho_fqfn);
             dlicv_fqfn = [];
             if opts.use_dlicv
-                dlicv_glob = mglob(fullfile(fileparts(t1w_fqfn), "*_DLICV_b70.nii.gz"));
+                dlicv_glob = mglob(fullfile(fileparts(t1w_fqfn), "*_DLICV.nii.gz"));
                 if ~isempty(dlicv_glob)
                     dlicv_fqfn = dlicv_glob(1);
                 end
@@ -1294,9 +1327,9 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 'omat', mat(t1w_on_tracer), ...
                 'bins', 4096, ...
                 'cost', opts.cost, ...
-                'searchrx', 20, ...
-                'searchry', 20, ...
-                'searchrz', 20, ...
+                'searchrx', 30, ...
+                'searchry', 30, ...
+                'searchrz', 30, ...
                 'dof', 6, ...
                 'interp', 'spline', ...
                 'noclobber', false);
@@ -1320,6 +1353,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             import mlvg.Lee2025.find_ho_avgt
             import mlvg.Lee2025.find_t1w
+            import mlvg.Lee2025.build_t1w_brain
             import mlvg.Lee2025.find_t1w_on_ho
             import mlvg.Lee2025.mat
 
@@ -1344,9 +1378,9 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 'omat', mat(ho_avgt_on_oo), ...
                 'bins', 4096, ...
                 'cost', opts.cost, ...
-                'searchrx', 20, ...
-                'searchry', 20, ...
-                'searchrz', 20, ...
+                'searchrx', 30, ...
+                'searchry', 30, ...
+                'searchrz', 30, ...
                 'dof', 6, ...
                 'interp', 'spline', ...
                 'noclobber', false);
