@@ -837,8 +837,10 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
             arguments
                 globbing_mat {mustBeFile} = ...
-                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_fdg_missing_mipts.mat")
-                opts.globbing_var = "srcdata_fdg_missing_mipts"
+                    fullfile(getenv("HOME"), "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_co.mat")
+                opts.globbing_var = "srcdata_co"
+                opts.minz_for_mip = 5
+                opts.minz_for_mip_co = 40
                 opts.selection_indices double = []
                 opts.Ncol {mustBeInteger} = 5
                 opts.out_dir {mustBeTextScalar} = "/scratch/jjlee/Singularity/CCIR_01211"
@@ -861,7 +863,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             disp(ascol(globbed))
 
             % contact cluster slurm
-            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='4:00:00');
+            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='24:00:00');
             disp(c.AdditionalProperties)
             for irow = 1:Nrow
                 try
@@ -869,6 +871,8 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                         @mlvg.Lee2025Par.par_construct_pet_mipt, ...
                         1, ...
                         {globbed(irow, :), ...
+                        'minz_for_mip', opts.minz_for_mip, ...
+                        'minz_for_mip_co', opts.minz_for_mip_co, ...
                         'out_dir', opts.out_dir}, ...
                         'Pool', opts.Ncol, ...
                         'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
@@ -887,19 +891,19 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                 globbing_mat {mustBeFile} = ...
                     fullfile( ...
                     getenv("HOME"), ...
-                    "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "derivs_t1w_os.mat")
-                opts.globbing_var = ""
+                    "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "tmp.mat")
+                opts.globbing_var = "tmp"
                 opts.out_dir {mustBeTextScalar} = "/scratch/jjlee/Singularity/CCIR_01211"
                 opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo, 1:57 for fdg
-                opts.Ncol {mustBeInteger} = 22
-                opts.account {mustBeTextScalar} = "aristeidis_sotiras"
+                opts.Ncol {mustBeInteger} = 6
+                opts.account {mustBeTextScalar} = "manu_goyal"
             end
             if isemptytext(opts.globbing_var)
                 opts.globbing_var = mybasename(globbing_mat);
             end
             ld = load(globbing_mat);
             globbed = convertCharsToStrings(ld.(opts.globbing_var));
-            if ~startsWith(globbed(1), opts.out_dir)
+            if ~startsWith(globbed(1), opts.out_dir) && ~startsWith(globbed(1), filesep)
                 globbed = fullfile(opts.out_dir, globbed);
             end
             globbed = asrow(globbed);
@@ -996,25 +1000,23 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                     getenv("HOME"), ...
                     "mnt", "CHPC_scratch", "Singularity", "CCIR_01211", "srcdata_fdg_delay0.mat")
                 opts.globbing_var = "srcdata_fdg_delay0"
-                opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
+                opts.out_dir {mustBeTextScalar} = "/scratch/jjlee/Singularity/CCIR_01211"
                 opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo, 1:57 for fdg
                 opts.Ncol {mustBeInteger} = 8
-                opts.account {mustBeTextScalar} = "aristeidis_sotiras"
+                opts.account {mustBeTextScalar} = "manu_goyal"
             end
-            ld = load(globbing_mat);
-            globbed = convertCharsToStrings(ld.(opts.globbing_var));
+            if isscalar(globbing_mat) && endsWith(globbing_mat, ".mat")
+                ld = load(globbing_mat);
+                globbed = convertCharsToStrings(ld.(opts.globbing_var));
+            else
+                globbed = globbing_mat;
+            end
             globbed = asrow(globbed);
             if ~isempty(opts.selection_indices)
                 globbed = globbed(opts.selection_indices);
             end
-            if contains(globbing_mat, "fdg", IgnoreCase=true) || ...
-                    contains(globbing_mat, "co", IgnoreCase=true)
-                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='48gb', walltime='4:00:00');
-                opts.Ncol = 4;
-            else
-                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='4:00:00');
-                opts.Ncol = 4;
-            end
+
+            c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='4:00:00');
 
             % pad and reshape globbed
             Nrow = ceil(numel(globbed)/opts.Ncol);
@@ -1128,7 +1130,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             if isempty(opts.M)
                 opts.M = length(fqfns);
             end
-            if ~contains(fqfns(1), opts.out_dir)
+            if ~contains(fqfns(1), opts.out_dir) && ~startsWith(fqfns(1), filesep)
                 fqfns = fullfile(opts.out_dir, fqfns);
             end
 
@@ -1177,7 +1179,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             if isempty(opts.M)
                 opts.M = length(fqfns);
             end
-            if ~contains(fqfns(1), opts.out_dir)
+            if ~contains(fqfns(1), opts.out_dir) && ~startsWith(fqfns(1), filesep)
                 fqfns = fullfile(opts.out_dir, fqfns);
             end
 
@@ -1260,10 +1262,10 @@ classdef Lee2025Par < handle & mlvg.Lee2025
         function durations = par_construct_pet_avgt(nii, opts)
             arguments
                 nii {mustBeText} = "srcdata_ho.mat"
-                opts.out_dir {mustBeFolder} = "/scratch/CHPC_scratch/Singularity/CCIR_01211"
+                opts.out_dir {mustBeFolder} = "/home/usr/jjlee/mnt/CHPC_scratch/Singularity/CCIR_01211"
                 opts.M {mustBeNumeric} = []
                 opts.globbing_var {mustBeTextScalar} = "srcdata_ho"
-                opts.noclobber logical = true
+                opts.noclobber logical = false
             end
             nii = convertCharsToStrings(nii);
             opts.out_dir = convertCharsToStrings(opts.out_dir);
@@ -1298,11 +1300,13 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
         function durations = par_construct_pet_mipt(nii, opts)
             arguments
-                nii {mustBeText} = "srcdata_fdg_missing_mipt.mat"
-                opts.out_dir {mustBeFolder} = "/scratch/CHPC_scratch/Singularity/CCIR_01211"
+                nii {mustBeText} = "srcdata_fdg.mat"
+                opts.out_dir {mustBeFolder} = "/home/usr/jjlee/mnt/CHPC_scratch/Singularity/CCIR_01211"
                 opts.M {mustBeNumeric} = []
-                opts.globbing_var {mustBeTextScalar} = "srcdata_fdg_missing_mipt"
-                opts.noclobber logical = true
+                opts.globbing_var {mustBeTextScalar} = "srcdata_fdg"
+                opts.minz_for_mip {mustBeInteger} = 5
+                opts.minz_for_mip_co {mustBeInteger} = 40
+                opts.noclobber logical = false
             end
             nii = convertCharsToStrings(nii);
             opts.out_dir = convertCharsToStrings(opts.out_dir);
@@ -1326,7 +1330,49 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
                 try
                     nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
-                    mlvg.Lee2025.construct_pet_mipt(nii_fqfn, noclobber=opts.noclobber);
+                    mlvg.Lee2025.construct_pet_mipt(nii_fqfn, ...
+                        noclobber=opts.noclobber, ...
+                        minz_for_mip=opts.minz_for_mip, ...
+                        minz_for_mip_co=opts.minz_for_mip_co);
+                catch ME
+                    handwarning(ME)
+                end
+
+                durations(sidx) = toc;
+            end
+        end
+
+        function durations = par_copyfile_static(nii, opts)
+            arguments
+                nii {mustBeText} = "srcdata_fdg.mat"
+                opts.out_dir {mustBeFolder} = "/home/usr/jjlee/mnt/CHPC_scratch/Singularity/CCIR_01211"
+                opts.M {mustBeNumeric} = []
+                opts.globbing_var {mustBeTextScalar} = "srcdata_fdg"
+                opts.noclobber logical = false
+            end
+            nii = convertCharsToStrings(nii);
+            opts.out_dir = convertCharsToStrings(opts.out_dir);
+            if isscalar(nii) && endsWith(nii, ".mat")
+                ld = load(fullfile(opts.out_dir, nii));
+                nii = ld.(opts.globbing_var);
+            end
+            if isempty(opts.M)
+                opts.M = length(nii);
+            end
+            
+            nii = nii(~arrayfun(@isempty, nii));  % Remove empty cells, strings
+            durations = nan(1, length(nii));
+
+            parfor (sidx = 1:length(nii), opts.M)
+
+                tic;
+            
+                % setup
+                mlvg.CHPC3.setenvs();
+
+                try
+                    nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
+                    mlvg.Lee2025.copyfile_static(nii_fqfn, noclobber=opts.noclobber);
                 catch ME
                     handwarning(ME)
                 end
@@ -1373,14 +1419,14 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
         function durations = par_reflirt_t1w(nii, opts)
             arguments
-                nii {mustBeText} = "srcdata_fdg.mat"
-                opts.out_dir {mustBeFolder} = "~/mnt/CHPC_scratch/Singularity/CCIR_01211"
+                nii {mustBeText} = "srcdata_co.mat"
+                opts.out_dir {mustBeFolder} = "/home/usr/jjlee/mnt/CHPC_scratch/Singularity/CCIR_01211"
                 opts.M {mustBeNumeric} = []
-                opts.globbing_var {mustBeTextScalar} = "srcdata_fdg"
+                opts.globbing_var {mustBeTextScalar} = "srcdata_co"
                 opts.specialize_for_tracer logical = true
                 opts.noclobber logical = false
             end
-            if endsWith(nii, ".mat")
+            if isscalar(nii) && endsWith(nii, ".mat")
                 ld = load(fullfile(opts.out_dir, nii));
                 nii = ld.(opts.globbing_var);
             end
@@ -1415,6 +1461,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                 nii {mustBeText} = "sourcedata/sub-108007/ses-20210219143132/pet/sub-108007_ses-20210219143132_trc-oo_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
                 opts.out_dir {mustBeFolder} = "/home/usr/jjlee/mnt/CHPC_scratch/Singularity/CCIR_01211"
                 opts.M {mustBeNumeric} = []
+                opts.noclobber logical = false
             end
             if isempty(opts.M)
                 opts.M = length(nii);
@@ -1433,8 +1480,8 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
                     try
                         nii_fqfn = fullfile(opts.out_dir, nii(sidx)); 
-                        globbed = mglob(strrep(nii_fqfn, "delay0", "delay*"));
-                        mlvg.Lee2025.time_align(globbed);
+                        unaligned_fqfn = mglob(strrep(nii_fqfn, "delay0", "unaligned*"));
+                        mlvg.Lee2025.time_align([nii_fqfn, unaligned_fqfn], noclobber=opts.noclobber);
                     catch ME
                         handwarning(ME)
                     end
@@ -1453,8 +1500,8 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
                 try
                     nii_fqfn = fullfile(opts.out_dir, nii(sidx)); %#ok<PFBNS>
-                    globbed = mglob(strrep(nii_fqfn, "delay0", "delay*"));
-                    mlvg.Lee2025.time_align(globbed);
+                    unaligned_fqfn = mglob(strrep(nii_fqfn, "delay0", "unaligned*"));
+                    mlvg.Lee2025.time_align([nii_fqfn, unaligned_fqfn], noclobber=opts.noclobber);
                 catch ME
                     handwarning(ME)
                 end

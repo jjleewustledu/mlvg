@@ -166,6 +166,17 @@ classdef Lee2025 < handle & mlsystem.IHandle
     %% HELPERS
 
     methods (Static)
+
+        function fp = blurredFileprefix(fp, blur)
+            if blur < eps
+                return
+            end
+            if blur < 1
+                fp = sprintf('%s_b0%g', fp, round(10*max(blur)));                
+                return
+            end
+            fp = sprintf('%s_b%g', fp, round(10*max(blur)));
+        end
         
         function build_3dresample(fqfn, opts)
             %% builds 3dresample only on T1w
@@ -177,7 +188,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
 
             % fqfn is a file, but must be absolutely fully-qualified
-            if ~contains(fqfn, pwd)
+            if ~contains(fqfn, pwd) && ~startsWith(fqfn, filesep)
                 fqfn = fullfile(pwd, fqfn);
             end
 
@@ -225,46 +236,98 @@ classdef Lee2025 < handle & mlsystem.IHandle
             % import mlvg.Lee2025.qc_schaeffer_parc
             % import mlvg.Lee2025Par.cluster_construct_pet_mipt
             % import mlvg.Lee2025Par.cluster_construct_pet_avgt
+            % import mlvg.Lee2025Par.par_construct_pet_mipt
+            % import mlvg.Lee2025Par.par_construct_pet_avgt
             % import mlvg.Lee2025Par.cluster_reflirt_t1w
             % import mlvg.Lee2025Par.cluster_time_align
 
             cd(fullfile(getenv("SINGULARITY_HOME"), "CCIR_01211"));
             build_workspace();  % in CCIR_01211/
+            % review workspace results for census consistency
+
+            %% employ 3dresample and construct orient-std, DLICV
+            selected = [];
+            build_3dresample(srcdata_t1w(selected), noclobber=true);
+            mlvg.Lee2025Par.cluster_deepmrseg_apply()
+
+            %% T1w blur ~ 3.5
+            % parfor idx = 1:6
+            %     ic = mlfourd.ImagingContext2(tmp2(idx)); ic = ic.blurred(3.5); ic.save(); end
+
+            %% prep for e7
             
-            % N.B. mlsiemens.BrainMoCoBuilder methods for building derivatives/, sourcedata/
-            build_3dresample(srcdata_t1w, noclobber=opts.noclobber);
-            % ic = mlfourd.ImagingContext2();
-            % ic = ic.blurred(3.5);
-            % ic.save();
+            %% N.B. mlsiemens.BrainMoCoBuilder methods for building derivatives/, sourcedata/
+            % ids = [108349, 108181, 108093, 108345, 108030, 108347];
+            % for id = ids
+            %     try
+            %         bmci = mlsiemens.BrainMoCoInfo(sub_id=id);
+            %         T = table(bmci); mlsiemens.BrainMoCoBuilder.construct_bmcbuilder([], T);
+            %     catch ME
+            %         handwarning(ME)
+            %     end
+            % end
 
-            % adjust objects in Schaefer2018_200Parcels_7Networks_order
-            repair_orient_std(derivs_schaefer2018_reg);
-            repair_orient_std2(derivs_schaefer2018_reg);
-            qc_orient_std(derivs_t1w_os(4:end))
-            T_qc_sch = qc_schaeffer_parc(derivs_schaefer2018_reg, do_repair=true);
+            %% rename delay{30,300} to unaligned{30,300}
+            % chmod 777 -R sourcedata/
+            % chmod 777 -R derivatives/
+            % movefile_niigz:  sourcedata/*delay300* -> unaligned300
+            % movefile_niigz:  sourcedata/*delay30* -> unaligned30
 
-            % intermediates for spatial normalization
+            %% repair co "combs"
+            % tmp = [108319 108303 108281 108277 108265 108246 108239 108214 108193 108121 108034 108032]; tmp = string(tmp);
+            % tmp3 = srcdata_co(contains(srcdata_co, tmp)); tmp3'
+            % parfor (idx = 1:13, 3)
+            %     try
+            %         mlvg.Lee2025.repair_co_nmaf(tmp3(idx), replace_fqfn=true);
+            %     catch ME
+            %         handwarning(ME);
+            %     end
+            % end
+            % parfor (idx = 1:13, 3)
+            %     try
+            %         mlvg.Lee2025.construct_pet_mipt(tmp3(idx), noclobber=false);
+            %     catch ME
+            %         handwarning(ME);
+            %     end
+            % end
+
+            %% copy statics to derivatives for drawing centerlines
+            par_copyfile_static(srcdata_all);
+
+            %% construct intermediates for spatial normalization            
             cluster_construct_pet_mipt(srcdata_fdg_delay0);
+            % par_construct_pet_mipt(srcdata_fdg_delay0, noclobber=false);
+            cluster_construct_pet_mipt(srcdata_co);
+            cluster_construct_pet_mipt(srcdata_co_head_low, minz_for_mip_co=5);
+            % construct_pet_mipt(srcdata_co, noclobber=false, minz_for_mip_co=40);
+            % construct_pet_mipt(srcdata_co_head_low, noclobber=false, minz_for_mip_co=5);
             cluster_construct_pet_avgt(srcdata_ho);
-            cluster_reflirt_t1w("srcdata_ho.mat", globbing_var="srcdata_ho");
-            cluster_reflirt_t1w("srcdata_fdg_delay0.mat", globbing_var="srcdata_fdg_delay0");
-            cluster_reflirt_t1w("srcdata_oo_delay0.mat", globbing_var="srcdata_oo_delay0");
-            cluster_reflirt_t1w("srcdata_co.mat", globbing_var="srcdata_co");
+            % par_construct_pet_avgt(srcdata_ho, noclobber=false);            
+            par_reflirt_t1w(srcdata_ho);  % 4dfp unavailable on cluster, M ~ 16
+            par_reflirt_t1w(srcdata_fdg);
+            par_reflirt_t1w(srcdata_oo);
+            par_reflirt_t1w(srcdata_co);
 
-            % align delay0 with delay30|delay300
-            cluster_time_align("srcdata_fdg_delay0.mat", globbing_var="srcdata_fdg_delay0");
-            cluster_time_align("srcdata_oo_delay0.mat", globbing_var="srcdata_oo_delay0");
+            %% align delay0 with delay30|delay300
+            cluster_time_align(srcdata_fdg_delay0);
+            cluster_time_align(srcdata_oo_delay0);
 
-            % IDIFs
+            %% build IDIFs
             build_mip_idif_finite(srcdata_oo_delay0)
             build_mip_idif_finite(srcdata_ho)
             build_mip_idif_finite(srcdata_co)
             build_mip_idif_finite(srcdata_fdg_delay0)
 
-            % Schaefer and other parcels
+            %% build Schaefer and other parcels
             cluster_build_schaeffer_parc()
             build_schaeffer_delays()
             build_schaeffer_finite()
+
+            %% repair orient-std objects in Schaefer2018_200Parcels_7Networks_order
+            repair_orient_std(derivs_schaefer2018_reg);
+            repair_orient_std2(derivs_schaefer2018_reg);
+            qc_orient_std(derivs_t1w_os(4:end))
+            T_qc_sch = qc_schaeffer_parc(derivs_schaefer2018_reg, do_repair=true);
 
             % assemble Martin v1
             build_all_martin_v1_idif()
@@ -816,7 +879,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             L = min(size(img, 4), max_len_avgt);
             img = img(:,:,:,1:L);
 
-            ifc.img = mean(img, 4, "omitmissing");
+            ifc.img = mean(img, 4, "omitnan");
             ifc.fqfn = fqfn1;
             ifc.save();
         end
@@ -827,6 +890,14 @@ classdef Lee2025 < handle & mlsystem.IHandle
             arguments
                 fqfn {mustBeFile}
                 opts.noclobber logical = true
+                opts.minz_for_mip {mustBeInteger} = 5
+                opts.minz_for_mip_co {mustBeInteger} = 40
+            end
+
+            if contains(mybasename(fqfn), "trc-co")
+                fqfn1 = mlvg.Lee2025.construct_co_mipt(fqfn, ...
+                    noclobber=opts.noclobber, minz_for_mip=opts.minz_for_mip_co);
+                return
             end
 
             % init
@@ -836,7 +907,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             fqfn1 = fullfile(filepath1, filename1);
             
             max_len_mipt = 30;
-            minz_for_mip = 5;
+            minz_for_mip = opts.minz_for_mip;
 
             % return existing fqfn1
             if opts.noclobber && isfile(fqfn1)
@@ -851,9 +922,81 @@ classdef Lee2025 < handle & mlsystem.IHandle
             img(:,:,1:minz_for_mip-1,:) = 0;
             img(:,:,end-minz_for_mip+1:end,:) = 0;
 
-            ifc.img = max(img, [], 4);
+            ifc.img = max(img, [], 4, "omitnan");
             ifc.fqfn = fqfn1;
             ifc.save();
+        end
+
+        function fqfn1 = construct_co_mipt(fqfn, opts)
+            %% work-around for failures of this.call_ifk()
+
+            arguments
+                fqfn {mustBeFile}
+                opts.noclobber logical = true
+                opts.minz_for_mip {mustBeInteger} = 40
+            end
+
+            % init
+            [filepath,fileprefix,ext] = myfileparts(fqfn);
+            filepath1 = strrep(filepath, "sourcedata", "derivatives");
+            filename1 = fileprefix + "_mipt" + ext;
+            fqfn1 = fullfile(filepath1, filename1);
+            
+            mint_for_mip = 1;
+            maxt_for_mip = 290;
+            minz_for_mip = opts.minz_for_mip;
+
+            % return existing fqfn1
+            if opts.noclobber && isfile(fqfn1)
+                return
+            end
+
+            % construct mipt
+            ifc = mlfourd.ImagingFormatContext2(fqfn);
+            img = ifc.img;
+            L = min(size(img, 4), maxt_for_mip);
+            img = img(:,:,:,mint_for_mip:L);
+            img(:,:,1:minz_for_mip-1,:) = 0;
+
+            ifc.img = max(img, [], 4, "omitnan");
+            ifc.fqfn = fqfn1;
+            ifc.save();
+        end
+
+        function copyfile_static(fqfn, opts)
+            %% only copies fqfn ~ sourcedata/**/*Static*
+
+            arguments
+                fqfn {mustBeFile}
+                opts.fqfn_dest {mustBeTextScalar} = ""
+                opts.noclobber logical = false
+                opts.folder_dest {mustBeTextScalar} = "derivatives"
+            end
+            assert(contains(fqfn, "sourcedata"))
+            if ~contains(mybasename(fqfn), "Static") && ...
+                    contains(mybasename(fqfn), "MovingAvgFrames")
+                fqfn = strrep(fqfn, "MovingAvgFrames", "Static");
+            end
+
+            % construct opts.fqfn_dest as needed
+            if isemptytext(opts.fqfn_dest)
+                [pth,fp,x] = myfileparts(string(fqfn));
+                pth = strrep(pth, "sourcedata", opts.folder_dest);
+                opts.fqfn_dest = fullfile(pth, fp + x);
+            end
+
+            % no clobber?
+            if opts.noclobber && isfile(opts.fqfn_dest)
+                return
+            end
+
+            % copyfile
+            ensuredir(myfileparts(opts.fqfn_dest));
+            if endsWith(fqfn, ".nii.gz")
+                copyfile_niigz(fqfn, opts.fqfn_dest);
+                return
+            end
+            copyfile(fqfn, opts.fqfn_dest);
         end
 
         function fqfn1_final = deepmrseg_apply(fqfn, opts)
@@ -887,7 +1030,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
         function ensure_finite(nmaf_fqfns, opts)
             arguments
                 nmaf_fqfns {mustBeText}
-                opts.target {mustBeTextScalar} = "schaefer"  % "mipidif"
+                opts.target {mustBeTextScalar} = ""  % "schaefer" "mipidif"
             end
 
             for fqfn = nmaf_fqfns
@@ -916,7 +1059,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                                 continue  % target file already exists
                             end
                         otherwise
-                            continue
+                            fqfn1 = fqfn;
                     end
                     ic = mlfourd.ImagingContext2(fqfn1);
                     ic = mlpipeline.ImagingMediator.ensureFiniteImagingContext2(ic);
@@ -987,48 +1130,126 @@ classdef Lee2025 < handle & mlsystem.IHandle
             disp(badframes_co)
         end
 
-        function fqfn = find_fdg_static(other_nii)
-            %% e.g., sub-108334_ses-20241216113854_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz
-
+        function feet_1st_to_head_1st(fqfn, opts)
             arguments
-                other_nii {mustBeFile}
+                fqfn {mustBeFile}
+                opts.flips {mustBeNumeric} = [3, 1]
+                opts.do_static logical = true
+                opts.do_avgt logical = true
+                opts.do_mipt logical = true
             end
 
-            other_nii = strrep(other_nii, "sourcedata", "derivatives");
-            derivs_subpth = extractBefore(fileparts(other_nii), filesep + "ses-");
-            globbed = mglob(fullfile( ...
-                derivs_subpth, "ses-*", "pet", "sub-*_ses-*_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz"));
-            assert(isscalar(globbed) && ~isemptytext(globbed))
-            fqfn = globbed;
+            ic = mlfourd.ImagingContext2(fqfn);
+            fp = ic.fileprefix;
+            for f = opts.flips
+                ic = flip(ic, f);
+            end
+            ic.fileprefix = fp;
+            ic.save();
+
+            if opts.do_static && ~contains(fqfn, "Static.nii.gz")
+                try
+                    fqfn_ = strrep(fqfn, "createNiftiMovingAvgFrames", "Static");
+                    mlvg.Lee2025.feet_1st_to_head_1st( ...
+                        fqfn_, flips=opts.flips, do_static=false, do_avgt=false, do_mipt=false);
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            if opts.do_avgt && ~contains(fqfn, "_avgt.nii.gz")
+                try
+                    fqfn_ = strrep(fqfn, "createNiftiMovingAvgFrames", "createNiftiMovingAvgFrames_avgt");
+                    mlvg.Lee2025.feet_1st_to_head_1st( ...
+                        fqfn_, flips=opts.flips, do_static=false, do_avgt=false, do_mipt=false);
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            if opts.do_mipt && ~contains(fqfn, "_mipt.nii.gz")
+                try
+                    fqfn_ = strrep(fqfn, "createNiftiMovingAvgFrames", "createNiftiMovingAvgFrames_mipt");
+                    mlvg.Lee2025.feet_1st_to_head_1st( ...
+                        fqfn_, flips=opts.flips, do_static=false, do_avgt=false, do_mipt=false);
+                catch ME
+                    handwarning(ME)
+                end
+            end
         end
 
-        function fqfn = find_fdg_mipt(other_nii)
-            %% e.g., sub-108334_ses-20241216113854_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames_mipt.nii.gz
+        function fqfn = find_fdg_static(other_nii, opts)
+            %% e.g., sub-108334_ses-20241216113854_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic_b50.nii.gz
 
             arguments
                 other_nii {mustBeFile}
+                opts.blur {mustBeNumeric} = 0
             end
 
             other_nii = strrep(other_nii, "sourcedata", "derivatives");
             derivs_subpth = extractBefore(fileparts(other_nii), filesep + "ses-");
-            src_subpth = strrep(derivs_subpth, "derivatives", "sourcedata");
-            globbed = mglob(fullfile( ...
-                derivs_subpth, "ses-*", "pet", "sub-*_ses-*_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames_mipt.nii.gz"));
-            if isscalar(globbed) && ~isemptytext(globbed)
-                fqfn = globbed;
-                return
+            fppatt = "sub-*_ses-*_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic";
+
+            % find Static
+            globbed = mglob(fullfile(derivs_subpth, "ses-*", "pet", ...
+                fppatt + ".nii.gz"));
+            assert(isscalar(globbed) && ~isemptytext(globbed))
+            fqfn = globbed;
+
+            if opts.blur > 0
+                % see also mlfourd.BlurringTool.blurredFileprefix
+
+                % find _bxx
+                globbed_blur = mglob(fullfile( derivs_subpth, "ses-*", "pet", ...
+                    mlvg.Lee2025.blurredFileprefix(fppatt, opts.blur) + ".nii.gz"));
+                if ~isemptytext(globbed_blur) && isscalar(globbed_blur)
+                    fqfn = globbed_blur;
+                    return
+                end
+                
+                % construct _bxx
+                ic = mlfourd.ImagingContext2(fqfn);
+                ic = ic.blurred(opts.blur);
+                ic.save();
+                fqfn = ic.fqfn;
+            end
+        end
+
+        function fqfn = find_fdg_mipt(other_nii, opts)
+            %% e.g., sub-108334_ses-20241216113854_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames_mipt_b50.nii.gz
+
+            arguments
+                other_nii {mustBeFile}
+                opts.blur {mustBeNumeric} = 0
             end
 
-            globbed = mglob(fullfile( ...
-                src_subpth, "ses-*", "pet", "sub-*_ses-*_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"));
-            assert(~isempty(globbed))
-            assert(isscalar(globbed))
-            ic = mlfourd.ImagingContext2(globbed);
-            ic = max(ic, [], 4);  % mipt
-            ic.fileprefix = strrep(ic.fileprefix, "_max4", "_mipt");
-            ic.relocateToDerivativesFolder();
-            ic.save();
-            fqfn = ic.fqfn;
+            other_nii = strrep(other_nii, "sourcedata", "derivatives");
+            derivs_subpth = extractBefore(fileparts(other_nii), filesep + "ses-");
+            fppatt = "sub-*_ses-*_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames_mipt";
+
+            % find _mipt
+            globbed = mglob(fullfile(derivs_subpth, "ses-*", "pet", ...
+                fppatt + ".nii.gz"));
+            assert(~isemptytext(globbed) && isscalar(globbed))
+            fqfn = globbed;
+
+            if opts.blur > 0
+                % see also mlfourd.BlurringTool.blurredFileprefix
+
+                % find _mipt_bxx
+                globbed_blur = mglob(fullfile(derivs_subpth, "ses-*", "pet", ...
+                    mlvg.Lee2025.blurredFileprefix(fppatt, opts.blur) + ".nii.gz"));
+                if ~isemptytext(globbed_blur) && isscalar(globbed_blur)
+                    fqfn = globbed_blur;
+                    return
+                end
+
+                % construct _mipt_bxx
+                ic = mlfourd.ImagingContext2(fqfn);
+                ic = ic.blurred(opts.blur);
+                ic.save();
+                fqfn = ic.fqfn;
+            end
         end
 
         function fqfn = find_ho_avgt(other_nii, opts)
@@ -1155,6 +1376,8 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 fqfn {mustBeFile}
                 opts.specialize_for_tracer logical = true
                 opts.noclobber logical = false
+                opts.use_mipt logical = true
+                opts.blur {mustBeNumeric} = 3.5
             end
 
             if contains(fqfn, "sub-108259_ses-20230731133714")
@@ -1163,21 +1386,21 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
             if opts.specialize_for_tracer
                 if contains(fqfn, "trc-ho")
-                    mlvg.Lee2025.flirt_t1w_on_ho(fqfn, noclobber=opts.noclobber);
+                    mlvg.Lee2025.flirt_t1w_on_ho(fqfn, noclobber=opts.noclobber, blur=opts.blur);
                     return
                 end
                 if contains(fqfn, "trc-co")
-                    mlvg.Lee2025.flirt_t1w_on_co(fqfn, noclobber=opts.noclobber);
+                    mlvg.Lee2025.flirt_t1w_on_co(fqfn, noclobber=opts.noclobber, use_mipt=opts.use_mipt, blur=opts.blur);
                     return
                 end
                 if contains(fqfn, "trc-oo")
-                    mlvg.Lee2025.flirt_t1w_on_oo(fqfn, noclobber=opts.noclobber);
+                    mlvg.Lee2025.flirt_t1w_on_oo(fqfn, noclobber=opts.noclobber, blur=opts.blur);
                     return
                 end
             end
 
             fqfn = strrep(fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
-            if ~contains(fqfn, pwd)
+            if ~contains(fqfn, pwd) && ~startsWith(fqfn, filesep)
                 fqfn = fullfile(pwd, fqfn);
             end
             t1w_fqfn = mlvg.Lee2025.find_t1w(fqfn);
@@ -1191,25 +1414,44 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             arguments
                 co_fqfn {mustBeFile}
-                opts.noclobber logical = true
+                opts.noclobber logical = false
+                opts.use_mipt logical = true
+                opts.blur {mustBeNumeric} = 3.5
             end
 
-            co_fqfn = strrep(co_fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
+            if opts.use_mipt
+                co_fqfn = strrep(co_fqfn, "createNiftiMovingAvgFrames", "createNiftiMovingAvgFrames_mipt");
+                co_fqfn = strrep(co_fqfn, "sourcedata", "derivatives");
+            else
+                co_fqfn = strrep(co_fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
+            end
             co_fqfn = strrep(co_fqfn, "consoleDynamic", "consoleStatic");
-            if ~contains(co_fqfn, pwd)
+            if ~contains(co_fqfn, pwd) && ~startsWith(co_fqfn, filesep)
                 co_fqfn = fullfile(pwd, co_fqfn);
             end
+            if opts.blur > 0
+                [pth,fp,x] = myfileparts(co_fqfn);
+                fp = mlvg.Lee2025.blurredFileprefix(fp, opts.blur);
+                co_fqfn1 = fullfile(pth, strcat(fp, x));
+                if ~opts.noclobber || ~isfile(co_fqfn1)
+                    ic = mlfourd.ImagingContext2(co_fqfn);
+                    ic = ic.blurred(opts.blur);
+                    ic.save();
+                end                
+                co_fqfn = ic.fqfn;
+            end
 
+            import mlvg.Lee2025.find_ho_avgt
+            import mlvg.Lee2025.find_t1w
+            import mlvg.Lee2025.find_t1w_on_ho
             import mlvg.Lee2025.find_fdg_static
             import mlvg.Lee2025.find_fdg_mipt
-            import mlvg.Lee2025.find_t1w
             import mlvg.Lee2025.find_t1w_on_fdg
 
             try
-                fdg_static = find_fdg_static(co_fqfn);
-                fdg_mipt = find_fdg_mipt(co_fqfn);
-                fdg_mipt_on_co = myfileprefix(fdg_mipt) + "_on_" + mybasename(co_fqfn) + ".nii.gz";
-                fdg_mipt_on_co = strrep(fdg_mipt_on_co, "sourcedata", "derivatives");
+                ho_avgt = find_ho_avgt(co_fqfn);
+                % fdg_static = find_fdg_static(co_fqfn);
+                % fdg_mipt = find_fdg_mipt(co_fqfn, blur=6);
             catch ME
                 % resort to specialize_for_tracer=false
                 fprintf("mlvg:RuntimeError: %s %s", stackstr(), ME.message);
@@ -1218,10 +1460,21 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 return
             end
 
+            % t1w -> ho_avgt -> co
+            tag = mlvg.Lee2025.blurredFileprefix("", opts.blur);
+            t1w_fqfn = mlvg.Lee2025.find_t1w(co_fqfn, tag="");
+            t4r = mlvg.T4Resolve(pet=co_fqfn, t1w=t1w_fqfn);
+            t4r.resolve_t1w_to_intermed_to_pet( ...
+                intermed=ho_avgt, ...
+                noclobber=opts.noclobber);
+
             % t1w -> fdg_mipt -> co
-            t1w_fqfn = mlvg.Lee2025.find_t1w(co_fqfn);
-            t4r = mlvg.T4Resolve(pet=co_fqfn, intermediary=fdg_mipt_on_co, t1w=t1w_fqfn);
-            t4r.resolve_t1w_to_intermed_to_pet(noclobber=opts.noclobber);
+            % t1w_fqfn = mlvg.Lee2025.find_t1w(co_fqfn);
+            % t4r = mlvg.T4Resolve(pet=co_fqfn, t1w=t1w_fqfn);
+            % t4r.resolve_t1w_to_intermeds_to_pet( ...
+            %     intermed=fdg_static, ...
+            %     intermed2=fdg_mipt, ...
+            %     noclobber=opts.noclobber);
         end
 
         function flirt_t1w_on_ho(ho_fqfn, opts)
@@ -1231,15 +1484,17 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             arguments
                 ho_fqfn {mustBeFile}
-                opts.noclobber logical = true
+                opts.noclobber logical = false
+                opts.blur {mustBeNumeric} = 3.5
             end
 
             ho_fqfn = strrep(ho_fqfn, "sourcedata", "derivatives");
             ho_fqfn = strrep(ho_fqfn, "createNiftiMovingAvgFrames", "createNiftiMovingAvgFrames_avgt");
-            if ~contains(ho_fqfn, pwd)
+            if ~contains(ho_fqfn, pwd) && ~startsWith(ho_fqfn, filesep)
                 ho_fqfn = fullfile(pwd, ho_fqfn);
             end
-            t1w_fqfn = mlvg.Lee2025.find_t1w(ho_fqfn);
+            tag = mlvg.Lee2025.blurredFileprefix("", opts.blur);
+            t1w_fqfn = mlvg.Lee2025.find_t1w(ho_fqfn, tag=tag);
             t4r = mlvg.T4Resolve(pet=ho_fqfn, t1w=t1w_fqfn);
             t4r.resolve_t1w_to_pet(noclobber=opts.noclobber);
         end
@@ -1251,7 +1506,8 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             arguments
                 oo_fqfn {mustBeFile}
-                opts.noclobber logical = true
+                opts.noclobber logical = false
+                opts.blur {mustBeNumeric} = 3.5
             end
 
             import mlvg.Lee2025.find_ho_avgt
@@ -1259,14 +1515,12 @@ classdef Lee2025 < handle & mlsystem.IHandle
             import mlvg.Lee2025.find_t1w_on_ho
 
             oo_fqfn = strrep(oo_fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
-            if ~contains(oo_fqfn, pwd)
+            if ~contains(oo_fqfn, pwd) && ~startsWith(oo_fqfn, filesep)
                 oo_fqfn = fullfile(pwd, oo_fqfn);
             end
 
             try
                 ho_avgt = find_ho_avgt(oo_fqfn);
-                ho_avgt_on_oo = myfileprefix(ho_avgt) + "_on_" + mybasename(oo_fqfn) + ".nii.gz";
-                ho_avgt_on_oo = strrep(ho_avgt_on_oo, "sourcedata", "derivatives");
             catch ME
                 % resort to specialize_for_tracer=false
                 fprintf("mlvg:RuntimeError: %s %s", stackstr(), ME.message);
@@ -1276,9 +1530,12 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
 
             % t1w -> ho_avgt -> oo
-            t1w_fqfn = mlvg.Lee2025.find_t1w(oo_fqfn);
-            t4r = mlvg.T4Resolve(pet=oo_fqfn, intermediary=ho_avgt, t1w=t1w_fqfn);
-            t4r.resolve_t1w_to_intermed_to_pet(noclobber=opts.noclobber);
+            tag = mlvg.Lee2025.blurredFileprefix("", opts.blur);
+            t1w_fqfn = mlvg.Lee2025.find_t1w(oo_fqfn, tag=tag);
+            t4r = mlvg.T4Resolve(pet=oo_fqfn, t1w=t1w_fqfn);
+            t4r.resolve_t1w_to_intermed_to_pet( ...
+                intermed=ho_avgt, ...
+                noclobber=opts.noclobber);
         end
 
         function inspect_centerlines(folder, opts)
@@ -1312,6 +1569,30 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
             obj = mlfourd.ImagingContext2(obj);
             fqfn = obj.fqfp + ".mat";
+        end
+
+        function movefile_delay2unaligned(fqfn, opts)
+            arguments
+                fqfn {mustBeFile}
+                opts.noclobber logical = true
+            end
+
+            % safety checks
+            if ~contains(fqfn, "delay")
+                return
+            end
+            if ~endsWith(fqfn, "createNiftiStatic.nii.gz")
+                return
+            end
+
+            % noclobber
+            fqfn1 = strrep(fqfn, "delay", "unaligned");
+            if isfile(fqfn1) && opts.noclobber
+                return
+            end
+
+            % proceed
+            movefile_niigz(fqfn, fqfn1);
         end
 
         function resultTable = parse_flirt_results(jsonFilenames)
@@ -1614,6 +1895,32 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
         end
 
+        function ic = repair_co_nmaf(fqfn, opts)
+            arguments
+                fqfn {mustBeFile}
+                opts.replace_fqfn logical = false
+                opts.thresh_frac {mustBeNumeric} = 0.333
+            end
+
+            ic = mlfourd.ImagingContext2(fqfn);
+            ic = mlpipeline.ImagingMediator.ensureFiniteImagingContext2(ic);
+            ifc = ic.imagingFormat;
+
+            query_img = ifc.img;
+            query_img = mean(mean(mean(query_img, 1), 2), 3);
+            thresh = opts.thresh_frac * dipmax(query_img);
+            select = query_img > thresh;
+            ifc.img = ifc.img(:,:,:,select);
+            ifc.json_metadata.timesMid = ifc.json_metadata.timesMid(ascol(select));
+            ifc.json_metadata.times = ifc.json_metadata.times(ascol(select));
+            ifc.json_metadata.taus = ifc.json_metadata.taus(ascol(select));
+
+            if opts.replace_fqfn
+                ifc.fqfn = fqfn;
+                ifc.save();
+            end
+        end
+
         function repair_orient_std(t1w_os)
             arguments
                 t1w_os {mustBeText}
@@ -1623,7 +1930,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 if ~endsWith(t, "orient-std.nii.gz")
                     continue
                 end
-                if ~contains(t, pwd)
+                if ~contains(t, pwd) && ~startsWith(t, filesep)
                     t1w_fqfn = fullfile(pwd, t);
                 else
                     t1w_fqfn = t;
@@ -1760,202 +2067,77 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             re = regexp(filearr, "\S+/(?<subses>sub-\d{6}/ses-(\d{8}|\d{14}))/\S+", "names");
             re2 = regexp(filearr2, "\S+/(?<subses>sub-\d{6}/ses-(\d{8}|\d{14}))/\S+", "names");
-            ssarr = string(cellfun(@(x) x.subses, re(~isempty(re)), UniformOutput=false));
-            ssarr2 = string(cellfun(@(x) x.subses, re2(~isempty(re2)), UniformOutput=false));
+            re = re(~cellfun(@isempty, re));
+            re2 = re2(~cellfun(@isempty, re2));
+            ssarr = string(cellfun(@(x) x.subses, re, UniformOutput=false));
+            ssarr2 = string(cellfun(@(x) x.subses, re2, UniformOutput=false));
             xor = setxor(ssarr, ssarr2);
         end
 
         function time_align(fqfns, opts)
             %% aligns delay > 0 to delay == 0
             %  fqfns ~
-            %  ["sub-108309_ses-20231204103722_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", ...
-            %   "sub-108309_ses-20231204103722_trc-fdg_proc-delay300-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"]
+            %  ["sub-108309_ses-20231204103722_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz", ...
+            %   "sub-108309_ses-20231204103722_trc-fdg_proc-delay300-BrainMoCo2-createNiftiStatic.nii.gz"]
             %
             %  N.B.: for opts.noclobber, to avoid data corruption, aligning will not proceed if unaligned files
             %  exist, indicating aligning has already been done.
 
             arguments
                 fqfns {mustBeText}
-                opts.noclobber logical = true
+                opts.noclobber logical = false
                 opts.use_static logical = true  % efficient if delay == 0 static is reliable as reference
-                opts.use_refweight logical = false
             end
             fqfns = convertCharsToStrings(fqfns);
             assert(all(arrayfun(@isfile, fqfns)))
-            assert(all(arrayfun(@(x) contains(x, "-delay"), fqfns)))
+            assert(all(arrayfun(@(x) contains(x, "-delay") || contains(x, "-unaligned"), fqfns)))
 
             import mlvg.Lee2025.rename_delay;
 
-            % no clobber for existing files "unaligned"
-            unaligned = mglob(fullfile(unique(fileparts(fqfns)), "*-unaligned*"));
-            if opts.noclobber && ~isempty(unaligned)
-                return
-            end
-
             % separate ref & its avgt
-            idx_delay0 = find(contains(fqfns, "-delay0"));
-            ref_ic = mlfourd.ImagingContext2(fqfns(idx_delay0));
+            idx_ref = contains(fqfns, "-delay0");
+            idx_unaligned = contains(fqfns, "-unaligned");
+            ref_ic = mlfourd.ImagingContext2(fqfns(idx_ref));
+            unaligned_ic = mlfourd.ImagingContext2(fqfns(idx_unaligned));
             if opts.use_static
-                ref_avgt_ic = mlfourd.ImagingContext2(strrep(ref_ic.fqfp, "createNiftiMovingAvgFrames", "createNiftiStatic"));
+                ref_ic = mlfourd.ImagingContext2(strrep(ref_ic.fqfp, "createNiftiMovingAvgFrames", "createNiftiStatic"));
+                unaligned_ic = mlfourd.ImagingContext2(strrep(unaligned_ic.fqfp, "createNiftiMovingAvgFrames", "createNiftiStatic"));
             else
                 if ~isfile(ref_ic.fqfp + "_avgt.nii.gz")
-                    ref_avgt_ic = ref_ic.timeAveraged();
-                    ref_avgt_ic.save();
+                    ref_ic = ref_ic.timeAveraged();
+                    ref_ic.save();
                 else
-                    ref_avgt_ic = mlfourd.ImagingContext2(ref_ic.fqfp + "_avgt.nii.gz");
+                    ref_ic = mlfourd.ImagingContext2(ref_ic.fqfp + "_avgt.nii.gz");
+                end
+                if ~isfile(unaligned_ic.fqfp + "_avgt.nii.gz")
+                    unaligned_ic = unaligned_ic.timeAveraged();
+                    unaligned_ic.save();
+                else
+                    unaligned_ic = mlfourd.ImagingContext2(unaligned_ic.fqfp + "_avgt.nii.gz");
                 end
             end
+            ref_fqfn = char(ref_ic.fqfn);
+            unaligned_fqfn = char(unaligned_ic.fqfn);           
 
-            % rename non-ref files "-delay*" to "-unaligned*"; copy *.json
-            fqfns1 = fqfns;
-            fqfns1(idx_delay0) = [];
-            unaligned_fqfns1 = rename_delay(fqfns1);
-            
-            % construct non-ref avgt
-            unaligned_avgt_fqfn = string();
-            for idx = 1:length(unaligned_fqfns1)
-                % *delay*_avgt.nii.gz may exist
-                avgt_fqfn = strrep(fqfns1(idx), ".nii.gz", "_avgt.nii.gz");
-                if isfile(avgt_fqfn)
-                    % avoid expensive construction of _avgt
-                    unaligned_avgt_fqfn(idx) = rename_delay(avgt_fqfn);
-                    continue
-                end
-
-                % create de novo *unaligned*_avgt.nii.gz
-                unaligned_ic__ = mlfourd.ImagingContext2(unaligned_fqfns1(idx));
-                unaligned_avgt_ic__ = unaligned_ic__.timeAveraged();
-                unaligned_avgt_ic__.save();
-                unaligned_avgt_fqfn(idx) = unaligned_avgt_ic__.fqfn;
+            if ~contains(ref_fqfn, pwd) && ~startsWith(ref_fqfn, filesep)
+                ref_fqfn = fullfile(pwd, ref_fqfn);
+            end
+            if ~contains(unaligned_fqfn, pwd) && ~startsWith(unaligned_fqfn, filesep)
+                unaligned_fqfn = fullfile(pwd, unaligned_fqfn);
             end
 
-            % consider using refweight
-            if opts.use_refweight
-                try
-                    % gather info
-                    deriv_pet_path = strrep(ref_avgt_ic.filepath, "sourcedata", "derivatives");
-                    deriv_sub_path = extractBefore(deriv_pet_path, "/ses-");
-                    deriv_anat_path = mglob(fullfile(deriv_sub_path, "ses-*", "anat"));
-                    deriv_anat_path = deriv_anat_path(1);
-                    weight = mglob(fullfile(deriv_anat_path, "sub-*_ses-*_T1w*_DLICV_b*.nii.gz"));
-                    weight = weight(end);
-                    t1w_on_pet_fp = mglob(fullfile(deriv_pet_path, "T1w_on_sub-*_ses-*_trc*delay30*.nii.gz"));
-                    t1w_on_pet_fp = mybasename(t1w_on_pet_fp(end));
-                    re = regexp(mybasename(weight), "(?<dlicv>_DLICV_b\d+)$", "names");
-                    refweight = fullfile(deriv_pet_path, t1w_on_pet_fp + re.dlicv + ".nii.gz");
-                    mat = mglob(fullfile(deriv_sub_path, "ses-*", "pet", t1w_on_pet_fp + ".mat"));
-                    assert(isfile(mat))
+            % defective t4img for 4D on linux1?
+            % t4r = mlvg.T4Resolve(pet=ref_fqfn, unaligned=unaligned_fqfn);
+            % t4r.resolve_unaligned_to_pet(noclobber=opts.noclobber);
 
-                    % applyXfm
-                    flirt = mlfsl.Flirt( ...
-                        'in', weight, ...
-                        'ref', ref_avgt_ic, ...
-                        'out', refweight, ...
-                        'omat', mat, ...
-                        'bins', 4096, ...
-                        'cost', 'mutualinfo', ...
-                        'searchrx', 10, ...
-                        'searchry', 10, ...
-                        'searchrz', 10, ...
-                        'dof', 6, ...
-                        'interp', 'trilinear', ...
-                        'noclobber', false);
-                    flirt.applyXfm();
-                catch ME
-                    handwarning(ME)
-                    refweight = [];
-                end
-            else
-                refweight = [];
-            end
+            out_fqfn = strrep(unaligned_fqfn, "unaligned", "delay");
+            omat = strrep(unaligned_fqfn, ".nii.gz", "_on_ref.mat");
 
-            % flirt all non-ref avgt to ref avgt; apply transformations to time-series
-            outs = strrep(unaligned_avgt_fqfn, ".nii.gz", "_on_ref.nii.gz");
-            omats = strrep(unaligned_avgt_fqfn, ".nii.gz", "_on_ref.mat");
-            for idx = 1:length(unaligned_avgt_fqfn)
-                flirt = mlfsl.Flirt( ...
-                    'in', unaligned_avgt_fqfn(idx), ...
-                    'ref', ref_avgt_ic, ...
-                    'out', outs(idx), ...
-                    'omat', omats(idx), ...
-                    'bins', 4096, ...
-                    'cost', 'mutualinfo', ...
-                    'searchrx', 10, ...
-                    'searchry', 10, ...
-                    'searchrz', 10, ...
-                    'dof', 6, ...
-                    'refweight', refweight, ...
-                    'interp', 'spline', ...
-                    'noclobber', true);
-                if ~opts.noclobber || ~isfile(outs(idx))
-                    % do expensive coreg.
-                    flirt.flirt();
-                    assert(isfile(outs(idx)))
-
-                    % apply to time-series
-                    flirt.in = unaligned_fqfns1(idx);
-                    flirt.out = fqfns1(idx);
-                    flirt.ref = ref_avgt_ic;
-                    flirt.interp = 'spline';
-                    flirt.applyXfm();
-                    assert(isfile(fqfns1(idx)))
-                end
-            end
-
-            % also align the static delay > 0
-            mlvg.Lee2025.time_align_static(fqfns)
-        end
-
-        function time_align_static(fqfns)
-            %% having completed time_align, also align static delay > 0 to static delay == 0
-            %  fqfns ~
-            %  ["sub-108309_ses-20231204103722_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz", ...
-            %   "sub-108309_ses-20231204103722_trc-fdg_proc-delay300-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"]
-            %
-            %  N.B.: to avoid data corruption, aligning will not proceed if delayed_static & unaligned_delayed_static
-            %  both exist, indicating aligning has already been done.
-
-            arguments
-                fqfns {mustBeText}
-            end
-            fqfns = convertCharsToStrings(fqfns);
-            assert(all(arrayfun(@isfile, fqfns)))
-            assert(all(arrayfun(@(x) contains(x, "-delay"), fqfns)))
-
-            % find delay > 0
-            all_matches = regexp(fqfns, "-delay(\d+)", "tokens", "once");  % returns cell array
-            valid_matches = all_matches(~arrayfun(@isemptytext, all_matches));
-            delay_values = cellfun(@(x) str2double(x{1}), valid_matches);
-            delay_values = delay_values(delay_values ~= 0);
-            delay_sec = delay_values(1);  % e.g., 30, 300
-
-            % proceed only if there exists transformation:  delayed -> delay0
-            fqfn_delay0 = fqfns(contains(fqfns, "-delay0"));
-            fqfn_delayed = fqfns(contains(fqfns, "-delay" + delay_sec));
-            prefix__ = strrep(fqfn_delayed, "-delay", "-unaligned");
-            transform = myfileprefix(prefix__) + "_avgt_on_ref.mat";
-            if ~isfile(transform)
-                % e.g.: sub-108309_ses-20231204103722_trc-fdg_proc-unaligned300-BrainMoCo2-createNiftiMovingAvgFrames_avgt_on_ref.mat
-                return
-            end
-            
-            % apply transform (xfm) to static delay > 0
-            delay0_static = strrep(fqfn_delay0, "createNiftiMovingAvgFrames", "createNiftiStatic");  % just needs to have correct image shape
-            delayed_static = strrep(fqfn_delayed, "createNiftiMovingAvgFrames", "createNiftiStatic");
-            unaligned_delayed_static = strrep(delayed_static, "-delay", "-unaligned");
-            if isfile(delayed_static) && isfile(unaligned_delayed_static)
-                % alignment was already done; don't clobber and confuse
-                return
-            end
-            movefile_niigz(delayed_static, unaligned_delayed_static);
-            %delayed_static_j = strrep(delayed_static, ".nii.gz", ".json");
-            %unaligned_delayed_static_j = strrep(unaligned_delayed_static, ".nii.gz", ".json");
-            %copyfile_niigz(delayed_static_j, unaligned_delayed_static_j);
             flirt = mlfsl.Flirt( ...
-                'in', unaligned_delayed_static, ...
-                'ref', delay0_static, ...
-                'out', delayed_static, ...
-                'omat', transform, ...
+                'in', unaligned_fqfn, ...
+                'ref', ref_fqfn, ...
+                'out', out_fqfn, ...
+                'omat', omat, ...
                 'bins', 4096, ...
                 'cost', 'mutualinfo', ...
                 'searchrx', 10, ...
@@ -1964,9 +2146,21 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 'dof', 6, ...
                 'interp', 'spline', ...
                 'noclobber', true);
-            flirt.applyXfm();
+            if ~opts.noclobber || ~isfile(out_fqfn)
+                % do expensive coreg.
+                flirt.flirt();
+                assert(isfile(out_fqfn))
 
-            deleteExisting(fullfile(fileparts(delayed_static), "*.log"));
+                % apply to time-series
+                unaligned_nmaf_fqfn = strrep(unaligned_fqfn, "createNiftiStatic", "createNiftiMovingAvgFrames");
+                out_nmaf_fqfn = strrep(out_fqfn, "createNiftiStatic", "createNiftiMovingAvgFrames");
+                flirt.in = unaligned_nmaf_fqfn;
+                flirt.out = out_nmaf_fqfn;
+                flirt.ref = ref_fqfn;
+                flirt.interp = 'spline';
+                flirt.applyXfm();
+                assert(isfile(out_nmaf_fqfn))
+            end
         end
     end
     
