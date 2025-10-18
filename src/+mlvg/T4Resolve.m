@@ -106,9 +106,13 @@ classdef T4Resolve < handle & mlsystem.IHandle
             end
             
             this.pet_ = mlfourd.ImagingContext2(opts.pet);
-            this.pet_.fqfn = convertStringsToChars(this.pet_.fqfn);
+            if ~ischar(this.pet_.fqfn)
+                this.pet_.fqfn = char(this.pet_.fqfn);  %% KLUDGE
+            end
             this.t1w_ = mlfourd.ImagingContext2(opts.t1w);
-            this.t1w_.fqfn = convertStringsToChars(this.t1w_.fqfn);
+            if ~ischar(this.t1w_.fqfn)
+                this.t1w_.fqfn = char(this.t1w_.fqfn);  %% KLUDGE
+            end
             assert(3 == ndims(this.pet_))
             this.atl_ = mlfourd.ImagingContext2(opts.atl);
             this.blur_ = opts.blur;
@@ -126,9 +130,10 @@ classdef T4Resolve < handle & mlsystem.IHandle
             %% returns fqfp
 
             filepath = fileparts(pet);
-            filepath = strrep(filepath, "sourcedata", "derivatives");
+            filepath = strrep(filepath, 'sourcedata', 'derivatives');
             t1w_on_pet = fullfile(filepath, ...
                 sprintf('%s_op_%s', mybasename(this.t1w_brain), mybasename(pet)));
+            t1w_on_pet = char(t1w_on_pet);
         end
 
         function this = flirt_t1w_to_pet(this, opts)
@@ -247,6 +252,7 @@ classdef T4Resolve < handle & mlsystem.IHandle
             end
 
             filepath = strrep(this.pet.filepath, "sourcedata", "derivatives");
+            ensuredir(filepath);
             pwd0 = pushd(filepath);
             
             % resolve
@@ -306,6 +312,7 @@ classdef T4Resolve < handle & mlsystem.IHandle
             end
 
             filepath = strrep(this.pet.filepath, 'sourcedata', 'derivatives');
+            ensuredir(filepath);
             pwd0 = pushd(filepath);
             
             % resolve intermed to pet
@@ -371,6 +378,7 @@ classdef T4Resolve < handle & mlsystem.IHandle
             end
 
             filepath = strrep(this.pet.filepath, 'sourcedata', 'derivatives');
+            ensuredir(filepath);
             pwd0 = pushd(filepath);
             
             % resolve intermed to pet

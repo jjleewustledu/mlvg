@@ -7,6 +7,9 @@ classdef Lee2025 < handle & mlsystem.IHandle
    
 
     properties (Constant)
+        HAS_AIF = string([108237, 108250, 108254, 108284, 108293, 108306])
+        HEAD_1ST = string([108007, 108287])
+        HEAD_IS_LOW = string([108007, 108179, 108187, 108287, 108293, 108300, 108345])        
         % PARC_SCHAEF_TAG = "-ParcSchaeffer-reshape-to-schaeffer-schaeffer"
         % PARC_SCHAEF_TAG = "-ParcSchaeffer-invariant-schaeffer-schaeffer"
         PARC_SCHAEF_TAG = "-ParcSchaeffer-highsnr-schaeffer-schaeffer"
@@ -199,7 +202,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 if isempty(fqfns)
                     return
                 end
-                fqfn = fqfns(end);
+                fqfn = fqfns(1);  % avoid orient-std*.nii.gz
             end
 
             % N.B. noclobber
@@ -267,7 +270,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             %     end
             % end
 
-            %% rename delay{30,300} to unaligned{30,300}
+            %% rename delay{30,300} to unaligned{30,300}; chmod is essential for t4_resolve
             % chmod 777 -R sourcedata/
             % chmod 777 -R derivatives/
             % movefile_niigz:  sourcedata/*delay300* -> unaligned300
@@ -302,11 +305,19 @@ classdef Lee2025 < handle & mlsystem.IHandle
             % construct_pet_mipt(srcdata_co, noclobber=false, minz_for_mip_co=40);
             % construct_pet_mipt(srcdata_co_head_low, noclobber=false, minz_for_mip_co=5);
             cluster_construct_pet_avgt(srcdata_ho);
-            % par_construct_pet_avgt(srcdata_ho, noclobber=false);            
+            % par_construct_pet_avgt(srcdata_ho, noclobber=false);     
+            cluster_construct_pet_avgt(srcdata_oo_delay0);       
             par_reflirt_t1w(srcdata_ho);  % 4dfp unavailable on cluster, M ~ 16
-            par_reflirt_t1w(srcdata_fdg);
-            par_reflirt_t1w(srcdata_oo);
+            par_reflirt_t1w(srcdata_fdg_delay0);
+            par_reflirt_t1w(srcdata_oo_delay0);
             par_reflirt_t1w(srcdata_co);
+
+            %% e.g., for new scans of fdg, ho, oo, co
+            % tmp = mlvg.Lee2025.setxor_sub_ses(srcdata_co, derivs_t1w_on_co);
+            % tmp'
+            % tmp2 = srcdata_co(find(contains(srcdata_co, tmp)));
+            % tmp2'
+            % mlvg.Lee2025Par.par_reflirt_t1w(tmp2, M=7)
 
             %% align delay0 with delay30|delay300
             cluster_time_align(srcdata_fdg_delay0);
@@ -969,7 +980,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             arguments
                 fqfn {mustBeFile}
                 opts.fqfn_dest {mustBeTextScalar} = ""
-                opts.noclobber logical = false
+                opts.noclobber logical = true
                 opts.folder_dest {mustBeTextScalar} = "derivatives"
             end
             assert(contains(fqfn, "sourcedata"))
@@ -1372,13 +1383,27 @@ classdef Lee2025 < handle & mlsystem.IHandle
         end
 
         function flirt_t1w(fqfn, opts)
+            %% coregisters T1w to PET
+            % Args:
+            % fqfn {mustBeFile}
+            % opts.specialize_for_tracer logical = true
+            % opts.noclobber logical = false
+            % opts.use_mipt logical = true  % recognized only by flirt_t1w_on_oo()
+            % opts.use_flirt logical = false  % flirt rather than t4_resolve
+            % opts.blur {mustBeNumeric} = 3.5
+            % opts.out_dir {mustBeFolder} = pwd
+
             arguments
                 fqfn {mustBeFile}
                 opts.specialize_for_tracer logical = true
                 opts.noclobber logical = false
-                opts.use_mipt logical = true
+                opts.use_mipt logical = true  % recognized only by flirt_t1w_on_oo()
+                opts.use_flirt logical = false  % flirt rather than t4_resolve
                 opts.blur {mustBeNumeric} = 3.5
+                opts.out_dir {mustBeFolder} = pwd
             end
+            fqfn = convertStringsToChars(fqfn);
+            opts.out_dir = convertStringsToChars(opts.out_dir);
 
             if contains(fqfn, "sub-108259_ses-20230731133714")
                 % OO administered but scanning performed with CO protocol
@@ -1386,37 +1411,42 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
             if opts.specialize_for_tracer
                 if contains(fqfn, "trc-ho")
-                    mlvg.Lee2025.flirt_t1w_on_ho(fqfn, noclobber=opts.noclobber, blur=opts.blur);
+                    mlvg.Lee2025.flirt_t1w_on_ho(fqfn, noclobber=opts.noclobber, blur=opts.blur, out_dir=opts.out_dir);
                     return
                 end
                 if contains(fqfn, "trc-co")
-                    mlvg.Lee2025.flirt_t1w_on_co(fqfn, noclobber=opts.noclobber, use_mipt=opts.use_mipt, blur=opts.blur);
+                    mlvg.Lee2025.flirt_t1w_on_co(fqfn, noclobber=opts.noclobber, blur=opts.blur, ...
+                        use_mipt=opts.use_mipt, out_dir=opts.out_dir);
                     return
                 end
                 if contains(fqfn, "trc-oo")
-                    mlvg.Lee2025.flirt_t1w_on_oo(fqfn, noclobber=opts.noclobber, blur=opts.blur);
+                    mlvg.Lee2025.flirt_t1w_on_oo(fqfn, noclobber=opts.noclobber, blur=opts.blur, out_dir=opts.out_dir);
                     return
                 end
             end
 
-            fqfn = strrep(fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
+            fqfn = strrep(fqfn, 'createNiftiMovingAvgFrames', 'createNiftiStatic');
             if ~contains(fqfn, pwd) && ~startsWith(fqfn, filesep)
                 fqfn = fullfile(pwd, fqfn);
             end
-            t1w_fqfn = mlvg.Lee2025.find_t1w(fqfn);
+            fqfn = convertStringsToChars(fqfn);
+            t1w_fqfn = convertStringsToChars(mlvg.Lee2025.find_t1w(fqfn));
             t4r = mlvg.T4Resolve(pet=fqfn, t1w=t1w_fqfn);
-            t4r.resolve_t1w_to_pet(noclobber=opts.noclobber);
+            if opts.use_flirt
+                t4r.flirt_t1w_to_pet(noclobber=opts.noclobber)
+            else
+                t4r.resolve_t1w_to_pet(noclobber=opts.noclobber);
+            end
         end
 
         function flirt_t1w_on_co(co_fqfn, opts)
-            %% intended for failures of MipIdif;
-            %  try again using fdg_mipt -> co_mipt, then applyXfm(T1w)
 
             arguments
                 co_fqfn {mustBeFile}
                 opts.noclobber logical = false
                 opts.use_mipt logical = true
                 opts.blur {mustBeNumeric} = 3.5
+                opts.out_dir {mustBeFolder} = pwd
             end
 
             if opts.use_mipt
@@ -1462,7 +1492,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             % t1w -> ho_avgt -> co
             tag = mlvg.Lee2025.blurredFileprefix("", opts.blur);
-            t1w_fqfn = mlvg.Lee2025.find_t1w(co_fqfn, tag="");
+            t1w_fqfn = mlvg.Lee2025.find_t1w(co_fqfn, tag=tag);
             t4r = mlvg.T4Resolve(pet=co_fqfn, t1w=t1w_fqfn);
             t4r.resolve_t1w_to_intermed_to_pet( ...
                 intermed=ho_avgt, ...
@@ -1486,6 +1516,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 ho_fqfn {mustBeFile}
                 opts.noclobber logical = false
                 opts.blur {mustBeNumeric} = 3.5
+                opts.out_dir {mustBeFolder} = pwd
             end
 
             ho_fqfn = strrep(ho_fqfn, "sourcedata", "derivatives");
@@ -1500,27 +1531,61 @@ classdef Lee2025 < handle & mlsystem.IHandle
         end
 
         function flirt_t1w_on_oo(oo_fqfn, opts)
-            %% intended for failures of MipIdif;
-            %  try again using ho_static -> oo_delay30_avgt, then applyXfm(T1w);
-            %  e.g., sub-108034_ses-20230717133405_trc-oo_proc-delay30-BrainMoCo2-createNiftiStatic.nii.gz
-
             arguments
                 oo_fqfn {mustBeFile}
                 opts.noclobber logical = false
+                opts.maskedbyz {mustBeNumeric} = [61,159]
                 opts.blur {mustBeNumeric} = 3.5
+                opts.out_dir {mustBeFolder} = pwd
+                opts.list_of_avgt_to_use {mustBeText} = ""
+            end
+            if isemptytext(opts.list_of_avgt_to_use)
+                assert(isfile(fullfile(opts.out_dir, "tube_wo_brain.mat")))
+                ld = load(fullfile(opts.out_dir, "tube_wo_brain.mat"));
+                opts.list_of_avgt_to_use = ld.tube_wo_brain;
             end
 
             import mlvg.Lee2025.find_ho_avgt
             import mlvg.Lee2025.find_t1w
             import mlvg.Lee2025.find_t1w_on_ho
 
-            oo_fqfn = strrep(oo_fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
+            patt = extractBefore(mybasename(oo_fqfn), "_proc-");
+            if any(contains(opts.list_of_avgt_to_use, patt))
+                oo_fqfn = strrep(oo_fqfn, "derivatives", "sourcedata");
+                oo_fqfn = strrep(oo_fqfn, "createNiftiStatic", "createNiftiMovingAvgFrames");
+                avgt_fqfn_ = strrep(oo_fqfn, "Frames.nii.gz", "Frames_avgt.nii.gz");
+                if ~isfile(avgt_fqfn_) || ~opts.noclobber
+                    ic = mlfourd.ImagingContext2(oo_fqfn);
+                    ic = ic.timeAveraged();
+                    ic.save();
+                    oo_fqfn = ic.fqfn;
+                else
+                    oo_fqfn = avgt_fqfn_;
+                end
+            else
+                oo_fqfn = strrep(oo_fqfn, "derivatives", "sourcedata");
+                oo_fqfn = strrep(oo_fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
+            end
+            if any(contains(patt, mlvg.Lee2025.HEAD_IS_LOW))
+                opts.maskedbyz = [];
+            end
+            if ~isempty(opts.maskedbyz)
+                oo_fqfn = mlvg.Lee2025.mask_and_blur_oo(oo_fqfn, opts.maskedbyz, opts.blur);
+            else
+                oo_fqfn = strrep(oo_fqfn, "createNiftiMovingAvgFrames", "createNiftiStatic");
+                ic = mlfourd.ImagingContext2(oo_fqfn);
+                ic = ic.blurred(opts.blur);
+                ic.filepath = strrep(ic.filepath, "sourcedata", "derivatives");
+                ic.save();
+                oo_fqfn = ic.fqfn;
+            end
             if ~contains(oo_fqfn, pwd) && ~startsWith(oo_fqfn, filesep)
                 oo_fqfn = fullfile(pwd, oo_fqfn);
             end
+            oo_fqfn = convertStringsToChars(oo_fqfn);
 
             try
-                ho_avgt = find_ho_avgt(oo_fqfn);
+                ho_avgt = convertStringsToChars(find_ho_avgt(oo_fqfn));
             catch ME
                 % resort to specialize_for_tracer=false
                 fprintf("mlvg:RuntimeError: %s %s", stackstr(), ME.message);
@@ -1530,8 +1595,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
 
             % t1w -> ho_avgt -> oo
-            tag = mlvg.Lee2025.blurredFileprefix("", opts.blur);
-            t1w_fqfn = mlvg.Lee2025.find_t1w(oo_fqfn, tag=tag);
+            t1w_fqfn = convertStringsToChars(mlvg.Lee2025.find_t1w(oo_fqfn, tag="_b35"));
             t4r = mlvg.T4Resolve(pet=oo_fqfn, t1w=t1w_fqfn);
             t4r.resolve_t1w_to_intermed_to_pet( ...
                 intermed=ho_avgt, ...
@@ -1562,6 +1626,23 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
         end
 
+        function oo_fqfn1 = mask_and_blur_oo(oo_fqfn, maskedbyz, blur)
+            arguments
+                oo_fqfn {mustBeFile}
+                maskedbyz {mustBeNumeric}
+                blur {mustBeNumeric}
+            end
+            assert(contains(mybasename(oo_fqfn), "trc-oo"))
+
+            ic = mlfourd.ImagingContext2(oo_fqfn);
+            ic = ic.maskedByZ(maskedbyz);
+            ic = ic.blurred(blur);
+            ic.filepath = strrep(ic.filepath, "sourcedata", "derivatives");
+            ic.save();
+            oo_fqfn1 = ic.fqfn;
+            assert(isfile(oo_fqfn1))
+        end
+
         function fqfn = mat(obj)
             if isfile(obj)
                 fqfn = strrep(obj, ".nii.gz", ".mat");
@@ -1579,9 +1660,6 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
             % safety checks
             if ~contains(fqfn, "delay")
-                return
-            end
-            if ~endsWith(fqfn, "createNiftiStatic.nii.gz")
                 return
             end
 
