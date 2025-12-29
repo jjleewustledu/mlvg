@@ -440,6 +440,38 @@ classdef T4Resolve < handle & mlsystem.IHandle
             popd(pwd0);
         end
 
+        function this = t4img_t1w_to_pet(this, t4, in, opts)
+            arguments
+                this mlvg.T4Resolve
+                t4 {mustBeFile}
+                in {mustBeText}
+                opts.noclobber logical = false
+                opts.out {mustBeNonempty}
+                opts.ref {mustBeNonempty} = this.pet
+            end
+
+            if opts.noclobber && isfile(this.t1w_on_pet)
+                return
+            end
+
+            filepath = strrep(this.pet.filepath, "sourcedata", "derivatives");
+            ensuredir(filepath);
+            pwd0 = pushd(filepath);
+
+            % t4img
+            this.t4img_alt(t4, in, out=opts.out, ref=opts.ref, n=true);
+            
+            % move files, write json
+            j = this.json(in);
+            if isfile(j)
+                copyfile(j, this.json(opts.out));
+            else
+                copyfile(this.json(this.t1w_brain), this.json(opts.out));
+            end          
+
+            popd(pwd0)
+        end
+
         function intermed_dlicv = make_dlicv(this, intermed)
             arguments
                 this mlvg.T4Resolve
@@ -595,15 +627,24 @@ classdef T4Resolve < handle & mlsystem.IHandle
                 in {mustBeNonempty}
                 opts.out {mustBeNonempty}
                 opts.ref {mustBeNonempty}
+                opts.n logical = false   % nearest neighbor
             end
 
             pwd0 = pushd(myfileparts(in));
             bv = mlfourdfp.FourdfpVisitor();
-            bv.t4img_4dfp( ...
-                t4, ...
-                strcat(myfileprefix(in), '.4dfp.img'), ...
-                out=myfileprefix(opts.out), ...
-                options=strcat('-O', myfileprefix(opts.ref)));
+            if opts.n
+                bv.t4img_4dfp_alt( ...
+                    t4, ...
+                    strcat(myfileprefix(in), '.4dfp.img'), ...
+                    out=myfileprefix(opts.out), ...
+                    options=sprintf('-n -O%s', myfileprefix(opts.ref)));
+            else
+                bv.t4img_4dfp( ...
+                    t4, ...
+                    strcat(myfileprefix(in), '.4dfp.img'), ...
+                    out=myfileprefix(opts.out), ...
+                    options=strcat('-O', myfileprefix(opts.ref)));
+            end
             out = mlvg.T4Resolve.niigz( ...
                 strcat(myfileprefix(opts.out), '.4dfp.img'), ...
                 ref=strcat(myfileprefix(opts.ref), '.nii.gz'));
@@ -616,17 +657,22 @@ classdef T4Resolve < handle & mlsystem.IHandle
 
             arguments
                 t4 {mustBeFile}
-                in {mustBeTextScalar}
-                opts.out {mustBeTextScalar}
-                opts.ref {mustBeTextScalar}
+                in {mustBeNonempty}
+                opts.out {mustBeNonempty}
+                opts.ref {mustBeNonempty}
+                opts.n logical = false   % nearest neighbor
             end
-            in = myfileprefix(in);
-            opts.out = myfileprefix(opts.out);
-            opts.ref = myfileprefix(opts.ref);
+            in = char(myfileprefix(in));
+            opts.out = char(myfileprefix(opts.out));
+            opts.ref = char(myfileprefix(opts.ref));
 
-            pwd0 = pushd(myfileparts(in));
-            cmd = sprintf('t4img_4dfp %s %s %s -O%s', t4, in, opts.out, opts.ref);
-            mysystem(cmd);
+            pwd0 = pushd(myfileparts(opts.ref));
+            if opts.n 
+                cmd = sprintf('t4img_4dfp %s %s %s -n -O%s', t4, in, opts.out, opts.ref);
+            else
+                cmd = sprintf('t4img_4dfp %s %s %s -O%s', t4, in, opts.out, opts.ref);
+            end
+            [s,r] = mysystem(cmd);
             out = mlvg.T4Resolve.niigz( ...
                 strcat(myfileprefix(opts.out), '.4dfp.img'), ...
                 ref=strcat(myfileprefix(opts.ref), '.nii.gz'));

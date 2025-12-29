@@ -65,12 +65,12 @@ classdef CHPC3
             c.saveProfile
             disp(c.AdditionalProperties)
         end
-        function propcluster_free()
+        function c = propcluster_free()
             c = parcluster;
             c.AdditionalProperties.EmailAddress = '';
             c.AdditionalProperties.EnableDebug = 0;
             c.AdditionalProperties.GpusPerNode = 0;
-            c.AdditionalProperties.MemUsage = '4000'; % in MB
+            c.AdditionalProperties.MemPerCPU = '24gb';
             c.AdditionalProperties.Node = 1;
             c.AdditionalProperties.Partition = 'free';
             c.AdditionalProperties.AdditionalSubmitArgs = '';

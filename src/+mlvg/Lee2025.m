@@ -11,8 +11,8 @@ classdef Lee2025 < handle & mlsystem.IHandle
         HEAD_1ST = string([108007, 108287])
         HEAD_IS_LOW = string([108007, 108179, 108187, 108287, 108293, 108300, 108345])        
         % PARC_SCHAEF_TAG = "-ParcSchaeffer-reshape-to-schaeffer-schaeffer"
-        % PARC_SCHAEF_TAG = "-ParcSchaeffer-invariant-schaeffer-schaeffer"
-        PARC_SCHAEF_TAG = "-ParcSchaeffer-highsnr-schaeffer-schaeffer"
+        PARC_SCHAEF_TAG = "-ParcSchaeffer-invariant-schaeffer-schaeffer"
+        % PARC_SCHAEF_TAG = "-ParcSchaeffer-highsnr"
     end
 
     properties
@@ -319,20 +319,15 @@ classdef Lee2025 < handle & mlsystem.IHandle
             % tmp2'
             % mlvg.Lee2025Par.par_reflirt_t1w(tmp2, M=7)
 
-            %% align delay0 with delay30|delay300
+            %% align delay30|delay300 to delay0
             cluster_time_align(srcdata_fdg_delay0);
             cluster_time_align(srcdata_oo_delay0);
 
             %% build IDIFs
-            build_mip_idif_finite(srcdata_oo_delay0)
-            build_mip_idif_finite(srcdata_ho)
-            build_mip_idif_finite(srcdata_co)
-            build_mip_idif_finite(srcdata_fdg_delay0)
+            mlvg.Lee205Par.cluster_build_mip_idif_finite()
 
             %% build Schaefer and other parcels
             cluster_build_schaeffer_parc()
-            build_schaeffer_delays()
-            build_schaeffer_finite()
 
             %% repair orient-std objects in Schaefer2018_200Parcels_7Networks_order
             repair_orient_std(derivs_schaefer2018_reg);
@@ -349,18 +344,19 @@ classdef Lee2025 < handle & mlsystem.IHandle
             build_workspace();  % in CCIR_01211/
         end
 
-        function build_all_martin_v1_idif(mat_file)
+        function build_all_martin_v1_idif(mat_file, opts)
             %% bulid v1 on Schaefer parcels using existing IDIFs for CO
 
             arguments
                 mat_file {mustBeFile} = fullfile( ...
                     getenv("SINGULARITY_HOME"), "CCIR_01211", "srcdata_co.mat")
+                opts.globbing_var = "srcdata_co"
             end
 
             import mlkinetics.*
 
             ld = load(mat_file);
-            globbed_co = ld.srcdata_co;
+            globbed_co = ld.(opts.globbing_var);
 
             for g = globbed_co
                 try
@@ -630,7 +626,8 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 nmaf {mustBeText}
                 opts.noclobber logical = false
                 opts.do_save logical = true
-            end            
+                opts.use_t4 logical = false
+            end
 
             ic = [];
 
@@ -666,6 +663,16 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
 
             function ic = base_case(nmaf)
+                if contains(mlvg.Lee2025.PARC_SCHAEF_TAG, "highsnr")
+                    ic = base_case_highsnr(nmaf);
+                    return
+                end
+
+                if opts.use_t4
+                    ic = base_case_t4(nmaf);
+                    return
+                end
+
                 ic = [];
                 try
 
@@ -678,23 +685,20 @@ classdef Lee2025 < handle & mlsystem.IHandle
                         ic = mlfourd.ImagingContext2(fqfn_final);
                         return
                     end
-
-                    % assign foundT1w
+ 
+                    % assign foundT1w on pet
                     petMed = mlvg.Ccir1211Mediator.create(nmaf);
-                    fp = lower(petMed.fileprefix);
+                    fp = petMed.fileprefix;
+                    fp = strrep(fp, "createNiftiMovingAvgFrames", "createNiftiStatic");
                     foundT1w = mglob(fullfile(petMed.derivPetPath, sprintf("T1w_on_%s.nii.gz", fp)));
                     foundT1w = foundT1w(contains(foundT1w, extractBefore(mybasename(nmaf), "-BrainMoCo2")));
                     if isempty(foundT1w)
-                        return
+                        foundT1w = mglob(fullfile(petMed.derivPetPath, "T1w_on_*.nii.gz"));
+                        foundT1w = foundT1w(end);
                     end
 
-                    % assign foundRef
-                    foundRef = mglob(fullfile(petMed.sourcePetPath, extractAfter(mybasename(foundT1w, withext=true), "T1w_on_")));
-                    foundRef = foundRef(contains(foundRef, extractBefore(mybasename(nmaf), "-BrainMoCo2")));
-                    if isempty(foundRef)
-                        return
-                    end
-                    imagingReference = mlfourd.ImagingContext2(foundRef);
+                    % assign ref, schaef, target
+                    imagingReference = mlfourd.ImagingContext2(foundT1w);
                     schaef_flirted_fqfn = strcat(petMed.fqfp, "-schaeffer.nii.gz");
                     schaef_flirted_fqfn = strrep(schaef_flirted_fqfn, "sourcedata", "derivatives");
                     target_fqfn = strrep(schaef_flirted_fqfn, "-schaeffer", mlvg.Lee2025.PARC_SCHAEF_TAG);
@@ -709,22 +713,132 @@ classdef Lee2025 < handle & mlsystem.IHandle
                         % omat = mglob(fullfile(petMed.derivSubPath, "ses-*", "pet", sprintf("T1w_on_%s.mat", trc)));
                         omat = mglob(fullfile(petMed.derivSubPath, "ses-*", "pet", mybasename(foundT1w) + ".mat"));
                         omat = omat(1);
+                        warning("mlvg:RuntimeWarning", "%s: using %s", stackstr(), omat);
                     end
+
+                    % create schaef_flirted_fqfn
+                    schaeffer_ic = petMed.schaeffer_ic;
+                    assert(isfile(schaeffer_ic))
                     assert(isfile(omat))
                     flirt = mlfsl.Flirt( ...
-                        'in', petMed.schaeffer_ic, ...
+                        'in', schaeffer_ic, ...
                         'ref', imagingReference, ...
                         'out', schaef_flirted_fqfn, ...
                         'omat', omat, ...
                         'bins', 4096, ...
                         'cost', 'normmi', ...
                         'interp', 'nearestneighbour', ...
-                        'noclobber', true);
+                        'noclobber', false);
                     flirt.applyXfm();
 
                     % make bids kit, parc kit, parc, reshape to parc
                     bk = mlkinetics.BidsKit.create(bids_tags="ccir1211", bids_fqfn=schaef_flirted_fqfn);
-                    pk = mlkinetics.ParcKit.create(bids_kit=bk, parc_tags="schaeffer-schaeffer");
+                    pk = mlkinetics.ParcKit.create(bids_kit=bk, parc_tags=mlvg.Lee2025.PARC_SCHAEF_TAG);
+                    p = pk.make_parc();
+                    ic = p.reshape_to_parc_fast(nmaf);  % petMed.imagingContext, using mlvg.Lee2025.PARC_SCHAEF_TAG
+                    ic.fqfn = fqfn_final;
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            function ic = base_case_highsnr(nmaf)
+                ic = [];
+                try
+
+                    % check noclobber
+                    [pth,fp] = myfileparts(nmaf);
+                    pth_derivs = strrep(pth, "sourcedata", "derivatives");
+                    fp_final = fp + mlvg.Lee2025.PARC_SCHAEF_TAG;
+                    fqfn_final = fullfile(pth_derivs, fp_final + ".nii.gz");
+                    if opts.noclobber && isfile(fqfn_final)
+                        ic = mlfourd.ImagingContext2(fqfn_final);
+                        return
+                    end
+ 
+                    % assign foundT1w, already co-registered to nmaf
+                    petMed = mlvg.Ccir1211Mediator.create(nmaf);
+                    fp = petMed.fileprefix;
+                    fp = strrep(fp, "createNiftiMovingAvgFrames", "createNiftiStatic");
+                    foundT1w = mglob(fullfile(petMed.derivPetPath, sprintf("T1w_on_%s.nii.gz", fp)));
+                    foundT1w = foundT1w(contains(foundT1w, extractBefore(mybasename(nmaf), "-BrainMoCo2")));
+                    if isempty(foundT1w)
+                        foundT1w = mglob(fullfile(petMed.derivPetPath, "T1w_on_*.nii.gz"));
+                        foundT1w = foundT1w(end);
+                    end
+
+                    % construct schaef_flirted_fqfn
+                    mask_ifc = mlfourd.ImagingFormatContext2(foundT1w);
+                    mask_ifc.img = single(mask_ifc.img > eps);
+                    mask_ifc.fileprefix = mask_ifc.fileprefix + "_binarized";
+                    mask_ifc.save();
+
+                    % make bids kit, parc kit, parc, reshape to parc
+                    bk = mlkinetics.BidsKit.create(bids_tags="ccir1211", bids_fqfn=mask_ifc.fqfn);
+                    pk = mlkinetics.ParcKit.create(bids_kit=bk, parc_tags=mlvg.Lee2025.PARC_SCHAEF_TAG);
+                    p = pk.make_parc();
+                    ic = p.reshape_to_parc_fast(nmaf, mask_ifc.fqfn);
+                    ic.fqfn = fqfn_final;
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            function ic = base_case_t4(nmaf)
+                ic = [];
+                try
+
+                    % check noclobber
+                    [pth,fp] = myfileparts(nmaf);
+                    pth_derivs = strrep(pth, "sourcedata", "derivatives");
+                    fp_final = fp + mlvg.Lee2025.PARC_SCHAEF_TAG;
+                    fqfn_final = fullfile(pth_derivs, fp_final + ".nii.gz");
+                    if opts.noclobber && isfile(fqfn_final)
+                        ic = mlfourd.ImagingContext2(fqfn_final);
+                        return
+                    end
+ 
+                    % assign foundT1w
+                    petMed = mlvg.Ccir1211Mediator.create(nmaf);
+                    fp = petMed.fileprefix;
+                    fp = strrep(fp, "createNiftiMovingAvgFrames", "createNiftiStatic");
+                    foundT1w = mglob(fullfile(petMed.derivPetPath, sprintf("T1w_on_%s.nii.gz", fp)));
+                    foundT1w = foundT1w(contains(foundT1w, extractBefore(mybasename(nmaf), "-BrainMoCo2")));
+                    if isempty(foundT1w)
+                        return
+                    end
+
+                    % assign foundRef
+                    foundRef = mglob(fullfile(petMed.derivPetPath, extractAfter(mybasename(foundT1w, withext=true), "T1w_on_")));
+                    foundRef = foundRef(contains(foundRef, extractBefore(mybasename(nmaf), "-BrainMoCo2")));
+                    if isempty(foundRef)
+                        return
+                    end
+                    imagingReference = mlfourd.ImagingContext2(foundRef);
+                    schaef_flirted_fqfn = strcat(petMed.fqfp, "-schaeffer.nii.gz");
+                    schaef_flirted_fqfn = strrep(schaef_flirted_fqfn, "sourcedata", "derivatives");
+                    target_fqfn = strrep(schaef_flirted_fqfn, "-schaeffer", mlvg.Lee2025.PARC_SCHAEF_TAG);
+                    if isfile(target_fqfn)  % from ic1 = p.reshape_to_parc_fast(fqfn);
+                        return
+                    end
+
+                    % t4 apply transform
+                    t4 = mglob(fullfile(petMed.derivPetPath, "Log", "sub-*_ses-*_T1w*_to_op_*_t4"));
+                    t4 = t4(1);
+                    assert(isfile(t4))
+
+                    % create schaef_flirted_fqfn
+                    schaeffer_ic = petMed.schaeffer_ic;
+                    ifc_4dfp = schaeffer_ic.fourdfp;
+                    ifc_4dfp.save();
+                    assert(isfile(ifc_4dfp.fqfn))
+                    assert(isfile(t4))
+                    t4r = mlvg.T4Resolve(pet=imagingReference, t1w=foundT1w);
+                    t4r.t4img_t1w_to_pet(char(t4), char(ifc_4dfp.fqfp), out=char(schaef_flirted_fqfn));
+
+                    % make bids kit, parc kit, parc, reshape to parc
+                    bk = mlkinetics.BidsKit.create(bids_tags="ccir1211", bids_fqfn=schaef_flirted_fqfn);
+                    pk = mlkinetics.ParcKit.create(bids_kit=bk, parc_tags=mlvg.Lee2025.PARC_SCHAEF_TAG);
                     p = pk.make_parc();
                     ic = p.reshape_to_parc_fast(nmaf);  % petMed.imagingContext, using mlvg.Lee2025.PARC_SCHAEF_TAG
                     ic.fqfn = fqfn_final;
@@ -820,7 +934,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
         end
 
-        function duration = build_schaeffer_parc(fqfn, opts)
+        function [ic,duration] = build_schaeffer_parc(fqfn, opts)
             %% 1st:  build all delay\d+ 
             %  2nd:  build finite combining delays;
             %  e.g.,
@@ -834,9 +948,14 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 opts.do_plot logical = false
                 opts.do_make_delays logical = true
                 opts.do_make_finite logical = true
+                opts.out_dir {mustBeFolder} = pwd
             end
 
             import mlkinetics.*
+
+            if ~contains(fqfn, opts.out_dir) && ~startsWith(fqfn, filesep)
+                fqfn = fullfile(opts.out_dir, fqfn);
+            end
 
             duration = nan;
             try
@@ -854,7 +973,11 @@ classdef Lee2025 < handle & mlsystem.IHandle
 
                 if opts.do_plot
                     disp(ic.fqfn)
-                    imagesc(ic)
+                    if contains(mlvg.Lee2025.PARC_SCHAEF_TAG, "highsnr")
+                        plot(ic);
+                    else
+                        imagesc(ic);
+                    end
                 end
 
                 duration = toc;
@@ -980,13 +1103,17 @@ classdef Lee2025 < handle & mlsystem.IHandle
             arguments
                 fqfn {mustBeFile}
                 opts.fqfn_dest {mustBeTextScalar} = ""
-                opts.noclobber logical = true
+                opts.noclobber logical = false
                 opts.folder_dest {mustBeTextScalar} = "derivatives"
+                opts.make_symlink logical = true
             end
             assert(contains(fqfn, "sourcedata"))
             if ~contains(mybasename(fqfn), "Static") && ...
                     contains(mybasename(fqfn), "MovingAvgFrames")
                 fqfn = strrep(fqfn, "MovingAvgFrames", "Static");
+            end
+            if opts.make_symlink && ~contains(hostname, "cluster")
+                return
             end
 
             % construct opts.fqfn_dest as needed
@@ -1001,13 +1128,22 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 return
             end
 
-            % copyfile
-            ensuredir(myfileparts(opts.fqfn_dest));
-            if endsWith(fqfn, ".nii.gz")
-                copyfile_niigz(fqfn, opts.fqfn_dest);
-                return
+            if opts.make_symlink
+                % make sym-link
+                ensuredir(myfileparts(opts.fqfn_dest));
+                if isfile(opts.fqfn_dest)
+                    delete(opts.fqfn_dest)
+                end
+                mysystem(sprintf("ln -s %s %s", fqfn, opts.fqfn_dest));
+            else
+                % copyfile
+                ensuredir(myfileparts(opts.fqfn_dest));
+                if endsWith(fqfn, ".nii.gz")
+                    copyfile_niigz(fqfn, opts.fqfn_dest);
+                    return
+                end
+                copyfile(fqfn, opts.fqfn_dest);
             end
-            copyfile(fqfn, opts.fqfn_dest);
         end
 
         function fqfn1_final = deepmrseg_apply(fqfn, opts)
@@ -1673,6 +1809,53 @@ classdef Lee2025 < handle & mlsystem.IHandle
             movefile_niigz(fqfn, fqfn1);
         end
 
+        function repair_delay0_static(fqfn, opts)
+            %% Repair delay0 static from listmode BMC,
+            %  which can get corrupted by high emissions from breathing tube.
+
+            arguments
+                fqfn {mustBeFile}  % e.g. sub-108277_ses-20230522133431_trc-oo_proc-delay30-BrainMoCo2-createNiftiStatic.nii.gz
+                opts.repair_d30 logical = true
+                opts.ceil_bqml double = []  % 10e5
+                opts.do_fsleyes logical = false
+            end
+            assert(contains(fqfn, "proc-delay0"))
+            assert(contains(fqfn, "Static"))
+
+            pwd0 = pushd(fileparts(fqfn));
+
+            % ensure avgt exists, view to confirm avgt is valid
+            fqfn_maf = strrep(fqfn, "Static", "MovingAvgFrames");
+            fqfn_avgt = strrep(fqfn, "Static", "MovingAvgFrames_avgt");
+            if ~isfile(fqfn_avgt)
+                assert(isfile(fqfn_maf))
+                ic = mlfourd.ImagingContext2(fqfn_maf);
+                ic = ic.timeAveraged();
+                ic.save();
+                copyfile(myfileprefix(fqfn_maf) + ".json", myfileprefix(fqfn_avgt) + ".json");
+            end
+            if opts.do_fsleyes
+                fprintf("%s: ctrl-c if avgt does not appear valid in fsleyes\n", stackstr());
+                mysystem(sprintf("fsleyes %s", fqfn_avgt));
+            end
+
+            % mark delay0 static defective
+            defects = fullfile(fileparts(fqfn), "Defects");
+            mkdir(defects)
+            movefile(fqfn, defects);
+
+            % sym-link delay0 static to avgt
+            copyfile(fqfn_avgt, fqfn);
+
+            if opts.repair_d30
+                d0 = fqfn;
+                u30 = strrep(d0, "delay0", "unaligned30");
+                mlvg.Lee2025.time_align([d0, u30], noclobber=false, ceil_bqml=opts.ceil_bqml);
+            end
+
+            popd(pwd0);
+        end
+
         function resultTable = parse_flirt_results(jsonFilenames)
             % PARSE_FLIRT_RESULTS Parse FSL flirt co-registration JSON files into a table
             %
@@ -1973,6 +2156,43 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
         end
 
+        function [omat_fqfn,flirt] = register_t1w_to_t1w(in_fqfn, ref_fqfn, opts)
+            %% flirt in -> ref=MNI152_T1_1mm_brain.nii.gz
+
+            arguments
+                in_fqfn {mustBeFile}
+                ref_fqfn {mustBeFile} = ...
+                    fullfile(getenv("FSLDIR"), "data", "standard", "MNI152_T1_1mm_brain.nii.gz")
+                opts.out_tag {mustBeTextScalar} = "atl"
+                opts.cost {mustBeTextScalar} = "corratio"
+                opts.dof {mustBeScalarOrEmpty} = 9
+                opts.interp {mustBeTextScalar} = "spline"
+                opts.noclobber logical = true
+                opts.noout logical = true  % do not write imagefile in_on_ref
+            end
+
+            [pth, fp] = myfileparts(in_fqfn);
+            out_fqfn = fullfile(pth, sprintf("%s_on_%s.nii.gz", fp, opts.out_tag));
+            omat_fqfn = myfileprefix(out_fqfn) + ".mat";
+            flirt = mlfsl.Flirt( ...
+                'in', in_fqfn, ...
+                'ref', ref_fqfn, ...
+                'out', out_fqfn, ...
+                'omat', omat_fqfn, ...
+                'bins', 2048, ...
+                'cost', opts.cost, ...
+                'dof', opts.dof, ...
+                'interp', opts.interp, ...
+                'noclobber', opts.noclobber);
+            if ~opts.noclobber || ~isfile(omat_fqfn)                
+                if opts.noout
+                    flirt.out = [];
+                end
+                flirt.flirt();
+            end
+            assert(isfile(omat_fqfn))
+        end
+
         function ic = repair_co_nmaf(fqfn, opts)
             arguments
                 fqfn {mustBeFile}
@@ -2067,7 +2287,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
             assert(isfile(orig_on_t1w))
 
-            % apply xfm:  sch_reg -> sch_reg
+            % apply xfm:  sch_orig -> sch_reg
             sch_reg_bak = strrep(sch_reg, ".nii", "_bak.nii");
             copyfile_niigz(sch_reg, sch_reg_bak);
             assert(isfile(sch_reg_bak))
@@ -2165,6 +2385,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 fqfns {mustBeText}
                 opts.noclobber logical = false
                 opts.use_static logical = true  % efficient if delay == 0 static is reliable as reference
+                opts.ceil_bqml = []  % 10e5
             end
             fqfns = convertCharsToStrings(fqfns);
             assert(all(arrayfun(@isfile, fqfns)))
@@ -2204,6 +2425,11 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 unaligned_fqfn = fullfile(pwd, unaligned_fqfn);
             end
 
+            if ~isempty(opts.ceil_bqml)
+                tmp_fqfn = mlvg.Lee2025.limit_by_ceil(ref_fqfn);
+                ref_fqfn = tmp_fqfn;
+            end
+
             % defective t4img for 4D on linux1?
             % t4r = mlvg.T4Resolve(pet=ref_fqfn, unaligned=unaligned_fqfn);
             % t4r.resolve_unaligned_to_pet(noclobber=opts.noclobber);
@@ -2223,7 +2449,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 'searchrz', 10, ...
                 'dof', 6, ...
                 'interp', 'spline', ...
-                'noclobber', true);
+                'noclobber', opts.noclobber);
             if ~opts.noclobber || ~isfile(out_fqfn)
                 % do expensive coreg.
                 flirt.flirt();
@@ -2239,6 +2465,133 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 flirt.applyXfm();
                 assert(isfile(out_nmaf_fqfn))
             end
+
+            if ~isempty(opts.ceil_bqml)
+                try
+                    delete(tmp_fqfn);
+                catch ME
+                    handwarning(ME);
+                end
+            end
+        end
+
+        function fqfn1 = limit_by_ceil(fqfn, ceil)
+            fqfn1 = fullfile(tempdir, mybasename(fqfn, withext=true));
+            ifc = mlfourd.ImagingFormatContext2(fqfn);
+            ifc.img(ifc.img > ceil) = ceil;
+            ifc.fqfn = fqfn1;
+            ifc.save();
+        end
+
+        function found = find_inconsistent_sforms(fqfns, opts)
+            %% Inconsistent sforms between T1w_on_pet and pet indicate manual nudging
+            %  that needs to be implemented and interpolated transformation of image data.
+            %
+            %  Args:
+            %    fqfns {mustBeText} ~ pet static, e.g.
+            %      sub-108007_ses-20210219152432_trc-co_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz
+            %    opts.do_fix logical = false
+            %    opts.tol double = 1  % for sforms
+
+            arguments
+                fqfns {mustBeText}
+                opts.do_fix logical = false
+                opts.tol double = 1  % for sforms
+            end
+
+            fprintf("** %s **:\n", stackstr());
+
+            found = [];
+            for fidx = 1:numel(fqfns)
+                try
+                    fqfn = fqfns(fidx);
+                    fqfn = strrep(fqfn, "sourcedata", "derivatives");  % derivatives may have static ~ mipt|avgt
+                    assert(isfile(fqfn), fqfn + " not found")
+                    [pth, fp] = myfileparts(fqfn);
+                    t1w_fqfn = fullfile(pth, "T1w_on_" + fp + ".nii.gz");
+                    assert(isfile(t1w_fqfn), t1w_fqfn + " not found")
+
+                    anat_info = niftiinfo(t1w_fqfn);
+                    func_info = niftiinfo(fqfn);
+
+                    % Get sform matrices (Transform.T is transposed relative to nibabel)
+                    S_anat = anat_info.Transform.T';
+                    S_func = func_info.Transform.T';
+
+                    inconsistency = max(abs(S_anat - S_func), [], "all");  % of sforms
+                    if inconsistency > opts.tol
+
+                        fprintf("inconsistency ~ %g mm between %s, %s\n", inconsistency, t1w_fqfn, fqfn);
+                        found = [found, t1w_fqfn];  %#ok<AGROW>
+
+                        if opts.do_fix
+                            % Voxel-to-voxel transformation
+                            T = S_func \ S_anat;  % equivalent to inv(S_func) * S_anat
+
+                            % Load anatomy data
+                            anat_data = niftiread(t1w_fqfn);
+
+                            % Create resampling grid in functional voxel space
+                            [X, Y, Z] = ndgrid(0:func_info.ImageSize(1)-1, ...
+                                0:func_info.ImageSize(2)-1, ...
+                                0:func_info.ImageSize(3)-1);
+
+                            % Transform to anatomy voxel coordinates
+                            T_inv = inv(T);
+                            coords = [X(:), Y(:), Z(:), ones(numel(X),1)] * T_inv';
+
+                            % Interpolate (add 1 for MATLAB 1-indexing)
+                            resampled = interp3(double(anat_data), ...
+                                coords(:,2)+1, coords(:,1)+1, coords(:,3)+1, ...
+                                'cubic', 0);
+                            resampled = reshape(resampled, func_info.ImageSize);
+
+                            % Save with functional geometry
+                            [pth_,fp_] = myfileparts(t1w_fqfn);
+                            nudged_fqfn = fullfile(pth_, fp_ + "_manually_nudged.nii.gz");
+                            movefile(t1w_fqfn, nudged_fqfn);
+                            assert(isfile(nudged_fqfn), "movefile %s to %s failed", t1w_fqfn, nudged_fqfn)
+                            anat_info.Transform = func_info.Transform;
+                            anat_info.raw = func_info.raw;
+                            niftiwrite(single(resampled), t1w_fqfn, anat_info, Compressed=true);
+                        end
+                    end
+
+                catch ME
+                    handwarning(ME)
+                end
+            end
+
+            % anat_info = niftiinfo('anatomy.nii.gz');
+            % func_info = niftiinfo('functional.nii.gz');
+            % 
+            % % Get sform matrices (Transform.T is transposed relative to nibabel)
+            % S_anat = anat_info.Transform.T';
+            % S_func = func_info.Transform.T';
+            % 
+            % % Voxel-to-voxel transformation
+            % T = S_func \ S_anat;  % equivalent to inv(S_func) * S_anat
+            % 
+            % % Load anatomy data
+            % anat_data = niftiread('anatomy.nii.gz');
+            % 
+            % % Create resampling grid in functional voxel space
+            % [X, Y, Z] = ndgrid(0:func_info.ImageSize(1)-1, ...
+            %     0:func_info.ImageSize(2)-1, ...
+            %     0:func_info.ImageSize(3)-1);
+            % 
+            % % Transform to anatomy voxel coordinates
+            % T_inv = inv(T);
+            % coords = [X(:), Y(:), Z(:), ones(numel(X),1)] * T_inv';
+            % 
+            % % Interpolate (add 1 for MATLAB 1-indexing)
+            % resampled = interp3(double(anat_data), ...
+            %     coords(:,2)+1, coords(:,1)+1, coords(:,3)+1, ...
+            %     'cubic', 0);
+            % resampled = reshape(resampled, func_info.ImageSize);
+            % 
+            % % Save with functional geometry
+            % niftiwrite(single(resampled), 'anatomy_aligned.nii.gz', func_info, 'Compressed', true);
         end
     end
     

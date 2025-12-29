@@ -818,6 +818,8 @@ classdef Lee2024 < handle & mlsystem.IHandle
         end
         
         function plot_bigraph(this, trc, ti)
+            %% plot twilite AIFs with centerline IDIFs
+            
             Ttwil = this.table_twilite_nii();
             Tidif = this.table_idif_nii();
 

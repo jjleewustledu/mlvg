@@ -9,7 +9,7 @@ classdef Inspector < handle
         WATER_DENSITY = 0.9982 % pure water at 20 C := 0.9982 mL/g; tap := 0.99823
         BLOOD_DENSITY = 1.06 % https://hypertextbook.com/facts/2004/MichaelShmukler.shtml; human whole blood 37 C
         BRAIN_DENSITY = 1.05 % Torack et al., 1976
-        LC = 0.81
+        LC = 1 % LC_glc ~ 0.81; LC_fdg ~ 1
         PLASMA_DENSITY = 1.03
     end
 
@@ -86,7 +86,7 @@ classdef Inspector < handle
                 fdg {mustBeText}  % array of fqfn
             end
 
-            measure_name = "CMR_{glc}";
+            measure_name = "CMR_{fdg}";
             measure_units = "\mu mol hg^{-1}min^{-1}";
             converter = @(x) x * 6000 / this.BRAIN_DENSITY;
 
@@ -900,9 +900,9 @@ classdef Inspector < handle
                     measure_name = "K_i";
                     measure_units = "mL hg^{-1}min^{-1}";  % v_1 ~ mL/cm^3
                     converter = @(x) x * 6000 / this.BRAIN_DENSITY;
-                case "CMR_{glc}"
+                case "CMR_{fdg}"
                     measure_index = [];
-                    measure_name = "CMR_{glc}";
+                    measure_name = "CMR_{fdg}";
                     measure_units = "\mu mol hg^{-1}min^{-1}";
                     converter = @(x) x * 6000 / this.BRAIN_DENSITY;
                 otherwise
@@ -931,7 +931,7 @@ classdef Inspector < handle
                 denom = data_k2 + data_k3;
                 data = data_v1 .* data_k1 .* data_k3 ./ denom;
                 data = converter(data);
-            elseif strcmpi(opts.measure, "CMR_{glc}")
+            elseif strcmpi(opts.measure, "CMR_{fdg}")
                 [data_k1_k2,found] = this.load(fdg, measure_index=1);
                 data_k2 = this.load(fdg, measure_index=2);
                 data_k1 = data_k1_k2 .* data_k2;
