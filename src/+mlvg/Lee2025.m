@@ -649,7 +649,6 @@ classdef Lee2025 < handle & mlsystem.IHandle
                     nmafs = mglob(nmaf);
                     nmafs = nmafs(~contains(nmafs, "_avgt") & ~contains(nmafs, "_mipt"));
                     nmafs = natsort(nmafs);
-                    ics = [];
                     for n = nmafs
                         ic = base_case(n);
                         if opts.do_save && ~isempty(ic)
@@ -663,6 +662,8 @@ classdef Lee2025 < handle & mlsystem.IHandle
             end
 
             function ic = base_case(nmaf)
+                % will return with existing schaef_flirted_fqfn, irrespective of noclobber
+                
                 if contains(mlvg.Lee2025.PARC_SCHAEF_TAG, "highsnr")
                     ic = base_case_highsnr(nmaf);
                     return
@@ -685,17 +686,40 @@ classdef Lee2025 < handle & mlsystem.IHandle
                         ic = mlfourd.ImagingContext2(fqfn_final);
                         return
                     end
+
+                    % manage delay > 0
+                    delay_basename = mybasename(nmaf);
+                    delayed = contains(delay_basename, "-delay") && ~contains(delay_basename, "-delay0");
+                    if delayed
+
+                        % expect that delay0 was prepared, and its schaef_flirted_fqfn is available
+                        schaef_flirted_fqfn = fullfile( ...
+                            pth_derivs, ...
+                            extractBefore(delay_basename, "_proc-") + ...
+                            "_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames-schaeffer.nii.gz");
+                        assert(isfile(schaef_flirted_fqfn), "%s: basecase failed for delayed", stackstr())
+
+                        % make bids kit, parc kit, parc, reshape to parc
+                        bk = mlkinetics.BidsKit.create(bids_tags="ccir1211", bids_fqfn=schaef_flirted_fqfn);
+                        pk = mlkinetics.ParcKit.create(bids_kit=bk, parc_tags=mlvg.Lee2025.PARC_SCHAEF_TAG);
+                        p = pk.make_parc();
+                        ic = p.reshape_to_parc_fast(nmaf);  % petMed.imagingContext, using mlvg.Lee2025.PARC_SCHAEF_TAG
+                        ic.fqfn = fqfn_final;
+                        return
+                    end
  
                     % assign foundT1w on pet
                     petMed = mlvg.Ccir1211Mediator.create(nmaf);
                     fp = petMed.fileprefix;
-                    fp = strrep(fp, "createNiftiMovingAvgFrames", "createNiftiStatic");
-                    foundT1w = mglob(fullfile(petMed.derivPetPath, sprintf("T1w_on_%s.nii.gz", fp)));
-                    foundT1w = foundT1w(contains(foundT1w, extractBefore(mybasename(nmaf), "-BrainMoCo2")));
-                    if isempty(foundT1w)
-                        foundT1w = mglob(fullfile(petMed.derivPetPath, "T1w_on_*.nii.gz"));
-                        foundT1w = foundT1w(end);
+                    fp_ = strrep(fp, "createNiftiMovingAvgFrames", "createNiftiStatic");
+                    foundT1w = mglob(fullfile(petMed.derivPetPath, sprintf("T1w_on_%s.nii.gz", fp_)));
+                    if isemptytext(foundT1w)
+                        fp_ = strrep(fp, "createNiftiMovingAvgFrames", "createNiftiMovingAvgFrames_avgt");
+                        foundT1w = mglob(fullfile(petMed.derivPetPath, sprintf("T1w_on_%s.nii.gz", fp_)));
                     end
+                    % select consistent with basename of nmaf
+                    foundT1w = foundT1w(contains(foundT1w, extractBefore(mybasename(nmaf), "-BrainMoCo2")));
+                    assert(~isemptytext(foundT1w))
 
                     % assign ref, schaef, target
                     imagingReference = mlfourd.ImagingContext2(foundT1w);
@@ -707,11 +731,11 @@ classdef Lee2025 < handle & mlsystem.IHandle
                     end
 
                     % flirt apply transform
-                    omat = fullfile(petMed.derivPetPath, mybasename(foundT1w) + ".mat");
+                    foundT1w_mat = mybasename(foundT1w) + ".mat";
+                    omat = fullfile(petMed.derivPetPath, foundT1w_mat);
                     if ~isfile(omat)
                         % use alternative mat, sometimes created manually
-                        % omat = mglob(fullfile(petMed.derivSubPath, "ses-*", "pet", sprintf("T1w_on_%s.mat", trc)));
-                        omat = mglob(fullfile(petMed.derivSubPath, "ses-*", "pet", mybasename(foundT1w) + ".mat"));
+                        omat = mglob(fullfile(petMed.derivSubPath, "ses-*", "pet", foundT1w_mat));
                         omat = omat(1);
                         warning("mlvg:RuntimeWarning", "%s: using %s", stackstr(), omat);
                     end
@@ -2553,7 +2577,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                             assert(isfile(nudged_fqfn), "movefile %s to %s failed", t1w_fqfn, nudged_fqfn)
                             anat_info.Transform = func_info.Transform;
                             anat_info.raw = func_info.raw;
-                            niftiwrite(single(resampled), t1w_fqfn, anat_info, Compressed=true);
+                            niftiwrite(single(resampled), t1w_fqfn, anat_info);
                         end
                     end
 

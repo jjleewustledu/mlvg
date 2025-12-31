@@ -602,30 +602,38 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             %% for clusters running Matlab parallel server
 
             arguments
-                globbing_mat {mustBeFile} = "srcdata_all_delay0.mat"
+                globbing_mat {mustBeText} = "srcdata_all_delay0.mat"
                 opts.globbing_var = ""
                 opts.selection_indices double = []  % total ~ 1:58 for ho, 1:69 for co, 1:112 for oo
-                opts.Ncol {mustBeInteger} = 16  % Ncol is N of subjects run serially per cpu; Nrow is N of sbatch jobs
+                opts.Ncol {mustBeInteger} = 16  % Ncol is N of subjects run per job; Nrow is N of sbatch jobs
                 opts.account {mustBeTextScalar} = "manu_goyal"
             end
-            if isemptytext(opts.globbing_var)
+            if isscalar(globbing_mat) && isfile(globbing_mat)
+                ld = load(globbing_mat);
+                globbed = convertCharsToStrings(ld.(opts.globbing_var));
+                globbed = asrow(globbed);
+            else
+                globbed = asrow(convertCharsToStrings(globbing_mat));
+            end
+            if isemptytext(opts.globbing_var) && isscalar(globbing_mat)
                 opts.globbing_var = mybasename(globbing_mat);
             end
-            ld = load(globbing_mat);
-            globbed = convertCharsToStrings(ld.(opts.globbing_var));
-            globbed = asrow(globbed);
             if ~isempty(opts.selection_indices)
                 globbed = globbed(opts.selection_indices);
             end
-            is_delayed = contains(globbed(1), "-delay");
-            if contains(globbing_mat, "_all", IgnoreCase=true)
-                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='200gb', walltime='24:00:00');
-            elseif contains(globbing_mat, "co", IgnoreCase=true)
-                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='6:00:00');
-            elseif contains(globbing_mat, "fdg", IgnoreCase=true)
-                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='6:00:00');  % fdg delay0 is 69GB uncompressed
+
+            if isscalar(globbing_mat)
+                if contains(globbing_mat, "_all", IgnoreCase=true)
+                    c = mlvg.CHPC3.propcluster(opts.account, mempercpu='256gb', walltime='24:00:00');
+                elseif contains(globbing_mat, "co", IgnoreCase=true)
+                    c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='6:00:00');
+                elseif contains(globbing_mat, "fdg", IgnoreCase=true)
+                    c = mlvg.CHPC3.propcluster(opts.account, mempercpu='96gb', walltime='6:00:00');  % fdg delay0 is 69GB uncompressed
+                else
+                    c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='6:00:00');
+                end
             else
-                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='32gb', walltime='6:00:00');
+                c = mlvg.CHPC3.propcluster(opts.account, mempercpu='256gb', walltime='3:00:00');
             end
 
             % pad and reshape globbed
@@ -650,7 +658,6 @@ classdef Lee2025Par < handle & mlvg.Lee2025
                         @mlvg.Lee2025Par.par_build_schaeffer_parc, ...
                         1, ...
                         {globbed(irow, :)}, ...
-                        'Pool', opts.Ncol, ...
                         'CurrentFolder', '/scratch/jjlee/Singularity/CCIR_01211', ...
                         'AutoAddClientPath', false);
                 catch ME
@@ -1059,7 +1066,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             %% for clusters running Matlab parallel server
 
             arguments
-                globbing_mat {mustBeFile} = ...
+                globbing_mat {mustBeText} = ...
                     fullfile(getenv("HOME"), "mnt", "derivs_t1w_os_brain.mat")
                 opts.globbing_var = "derivs_t1w_os_brain"
                 opts.noclobber logical = false
@@ -1242,7 +1249,7 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             arguments
                 fqfns {mustBeText}
                 opts.out_dir {mustBeFolder} = "/scratch/jjlee/Singularity/CCIR_01211"
-                opts.M {mustBeScalarOrEmpty} = []
+                opts.M {mustBeScalarOrEmpty} = 1
                 opts.select {mustBeInteger} = 1
             end
             if isempty(opts.M)
@@ -1256,15 +1263,17 @@ classdef Lee2025Par < handle & mlvg.Lee2025
 
             durations = nan(1, length(fqfns));
             
-            if isscalar(fqfns)
-                try
-                    % setup
-                    mlvg.CHPC3.setenvs();
+            if opts.M == 1
+                for fidx = 1:length(fqfns)
+                    try
+                        % setup
+                        mlvg.CHPC3.setenvs();
 
-                    fqfn = fqfns(1);
-                    [~,durations] = mlvg.Lee2025Par.build_schaeffer_parc(fqfn, out_dir=opts.out_dir);
-                catch ME
-                    handwarning(ME)
+                        fqfn = fqfns(fidx);
+                        [~,durations(fidx)] = mlvg.Lee2025Par.build_schaeffer_parc(fqfn, out_dir=opts.out_dir);
+                    catch ME
+                        handwarning(ME)
+                    end
                 end
             else
                 parfor (fidx = 1:length(fqfns), opts.M)
@@ -1616,232 +1625,6 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             end
         end
 
-        function durations = serial_register_t1w_to_t1w(in_fqfns, opts)
-            %% having obtained robust coregistration of T1w to PET by t4_resolve,
-            %  now generate xfm files that are usable by flirt by flirting
-            %  T1w to T1w_on_PET.
-
-            arguments
-                in_fqfns {mustBeFile}
-                opts.out_dir {mustBeFolder} = "/home/usr/jjlee/mnt/CHPC_scratch/Singularity/CCIR_01211"
-                opts.noclobber logical = true
-            end
-            assert(all(contains(in_fqfns, "_brain")))
-
-            ld_t1w_on_co = load(fullfile(opts.out_dir, "derivs_t1w_on_co.mat"));
-            ld_t1w_on_oo = load(fullfile(opts.out_dir, "derivs_t1w_on_oo_delay0.mat"));
-            ld_t1w_on_ho = load(fullfile(opts.out_dir, "derivs_t1w_on_ho.mat"));
-            ld_t1w_on_fdg = load(fullfile(opts.out_dir, "derivs_t1w_on_fdg_delay0.mat"));
-
-            durations = nan(1, numel(in_fqfns));
-
-            for idx = 1:numel(in_fqfns)
-                tic
-
-                % flirt in_fqfn on atl, only building xfm
-                in_fqfn = fullfile(opts.out_dir, in_fqfns(idx));
-                t1w_on_atl_mat = mlvg.Lee2025.register_t1w_to_t1w(in_fqfn, noclobber=opts.noclobber);
-
-                % per T1w, gather all T1w on pets
-                sub = extractAfter(extractBefore(in_fqfn, "/ses-"), "derivatives/");
-                t1ws_on_pet = [ ...
-                    ld_t1w_on_co.derivs_t1w_on_co(contains(ld_t1w_on_co.derivs_t1w_on_co, sub)), ...
-                    ld_t1w_on_oo.derivs_t1w_on_oo_delay0(contains(ld_t1w_on_oo.derivs_t1w_on_oo_delay0, sub)), ...
-                    ld_t1w_on_ho.derivs_t1w_on_ho(contains(ld_t1w_on_ho.derivs_t1w_on_ho, sub)), ...
-                    ld_t1w_on_fdg.derivs_t1w_on_fdg_delay0(contains(ld_t1w_on_fdg.derivs_t1w_on_fdg_delay0, sub))];
-                t1ws_on_pet = fullfile(opts.out_dir, t1ws_on_pet);
-
-                for t1w_on_pet = t1ws_on_pet
-
-                    try                        
-                        assert(isfile(t1w_on_pet))
-
-                        % flirt T1w_on_pet to T1w, only building xfm
-                        [t1w_on_pet_on_t1w_mat,flirt] = mlvg.Lee2025.register_t1w_to_t1w( ...
-                            t1w_on_pet, ...
-                            in_fqfn, ...
-                            out_tag="T1w", ...
-                            dof=6, ...
-                            noclobber=opts.noclobber);
-
-                        % find surrogates for trc_co*Static and trc_oo*delay0*Static
-                        if contains(t1w_on_pet, "_trc-co_")
-                            tracer = "co";
-                            pet = mglob(fullfile( ...
-                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-co_*_mipt.nii.gz"));
-                            pet = pet(1);
-                        elseif contains(t1w_on_pet, "_trc-oo_")
-                            tracer = "oo";
-                            pet = mglob(fullfile( ...
-                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-oo_*delay0*_avgt.nii.gz"));
-                            pet = pet(1);
-                        elseif contains(t1w_on_pet, "_trc-ho_")
-                            tracer = "ho";
-                            pet = mglob(fullfile( ...
-                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-ho_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz"));
-                            pet = pet(1);
-                        elseif contains(t1w_on_pet, "_trc-fdg_")
-                            tracer = "fdg";
-                            pet = mglob(fullfile( ...
-                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz"));
-                            pet = pet(1);
-                        else
-                            continue
-                        end
-                        assert(isfile(pet))
-
-                        % applyXfm:  pet to atl
-                        concat_mat = fullfile(fileparts(t1w_on_pet), sprintf("%s_on_atl.mat", mybasename(t1w_on_pet)));
-                        flirt.concatXfm(AtoB=t1w_on_pet_on_t1w_mat, BtoC=t1w_on_atl_mat, AtoC=concat_mat);
-                        flirt.in = pet;
-                        flirt.init = concat_mat;
-                        flirt.out = myfileprefix(pet) + "_on_atl.nii.gz";
-                        flirt.ref = fullfile(getenv("FSLDIR"), "data", "standard", "MNI152_T1_1mm_brain.nii.gz");
-                        try
-                            flirt.applyXfm();
-                        catch ME
-                            handwarning(ME);
-                        end
-
-                        % flirt T1w to T1w_on_pet, only building xfm for use with Schaefer and other parcellations
-                        t1w_on_pet_mat = myfileprefix(t1w_on_pet) + ".mat";
-                        t1w_on_pet_mat_ = mlvg.Lee2025.register_t1w_to_t1w( ...
-                            in_fqfn, ...
-                            t1w_on_pet, ...
-                            out_tag=tracer, ...
-                            dof=6, ...
-                            noclobber=opts.noclobber);
-                        movefile(t1w_on_pet_mat_, t1w_on_pet_mat)
-
-                    catch ME1
-                        handwarning(ME1);
-                    end
-                end
-                
-                durations(idx) = toc;
-            end
-        end
-
-        function durations = serial_register_t1w_to_t1w_by_tracer(in_fqfns, opts)
-            %% having obtained robust coregistration of T1w to PET by t4_resolve,
-            %  now generate xfm files that are usable by flirt by flirting
-            %  T1w to T1w_on_PET.
-
-            arguments
-                in_fqfns {mustBeFile}
-                opts.tracers {mustBeText} = ["co", "oo", "ho", "fdg"]
-                opts.out_dir {mustBeFolder} = "/home/usr/jjlee/mnt/CHPC_scratch/Singularity/CCIR_01211"
-                opts.noclobber logical = true
-            end
-            assert(all(contains(in_fqfns, "_brain")))
-
-            ld_t1w_on_co = load(fullfile(opts.out_dir, "derivs_t1w_on_co.mat"));
-            ld_t1w_on_oo = load(fullfile(opts.out_dir, "derivs_t1w_on_oo_delay0.mat"));
-            ld_t1w_on_ho = load(fullfile(opts.out_dir, "derivs_t1w_on_ho.mat"));
-            ld_t1w_on_fdg = load(fullfile(opts.out_dir, "derivs_t1w_on_fdg_delay0.mat"));
-
-            durations = nan(1, numel(in_fqfns));
-
-            for idx = 1:numel(in_fqfns)
-                tic
-
-                % flirt in_fqfn on atl, only building xfm
-                in_fqfn = fullfile(opts.out_dir, in_fqfns(idx));
-                t1w_on_atl_mat = mlvg.Lee2025.register_t1w_to_t1w(in_fqfn, noclobber=opts.noclobber);
-
-                % per T1w, gather all T1w on pets
-                sub = extractAfter(extractBefore(in_fqfn, "/ses-"), "derivatives/");
-                t1ws_on_pet = [];
-                for trc = tracers
-                    if contains(trc, "co", IgnoreCase=true)
-                        t1ws_on_pet = [t1ws_on_pet, ...
-                            ld_t1w_on_co.derivs_t1w_on_co(contains(ld_t1w_on_co.derivs_t1w_on_co, sub))];  %#ok<AGROW>
-                    end
-                    if contains(trc, "oo", IgnoreCase=true)
-                        t1ws_on_pet = [t1ws_on_pet, ...
-                            ld_t1w_on_oo.derivs_t1w_on_oo_delay0(contains(ld_t1w_on_oo.derivs_t1w_on_oo_delay0, sub))];  %#ok<AGROW>
-                    end
-                    if contains(trc, "ho", IgnoreCase=true)
-                        t1ws_on_pet = [t1ws_on_pet, ...
-                            ld_t1w_on_ho.derivs_t1w_on_ho(contains(ld_t1w_on_ho.derivs_t1w_on_ho, sub))];  %#ok<AGROW>
-                    end
-                    if contains(trc, "fdg", IgnoreCase=true)
-                        t1ws_on_pet = [t1ws_on_pet, ...
-                            ld_t1w_on_fdg.derivs_t1w_on_fdg_delay0(contains(ld_t1w_on_fdg.derivs_t1w_on_fdg_delay0, sub))];  %#ok<AGROW>
-                    end
-                end
-
-                for t1w_on_pet = t1ws_on_pet
-
-                    try                        
-                        assert(isfile(t1w_on_pet))
-
-                        % flirt T1w_on_pet to T1w, only building xfm
-                        [t1w_on_pet_on_t1w_mat,flirt] = mlvg.Lee2025.register_t1w_to_t1w( ...
-                            t1w_on_pet, ...
-                            in_fqfn, ...
-                            out_tag="T1w", ...
-                            dof=6, ...
-                            noclobber=opts.noclobber);
-
-                        % find surrogates for trc_co*Static and trc_oo*delay0*Static
-                        if contains(t1w_on_pet, "_trc-co_")
-                            tracer = "co";
-                            pet = mglob(fullfile( ...
-                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-co_*_mipt.nii.gz"));
-                            pet = pet(1);
-                        elseif contains(t1w_on_pet, "_trc-oo_")
-                            tracer = "oo";
-                            pet = mglob(fullfile( ...
-                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-oo_*delay0*_avgt.nii.gz"));
-                            pet = pet(1);
-                        elseif contains(t1w_on_pet, "_trc-ho_")
-                            tracer = "ho";
-                            pet = mglob(fullfile( ...
-                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-ho_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz"));
-                            pet = pet(1);
-                        elseif contains(t1w_on_pet, "_trc-fdg_")
-                            tracer = "fdg";
-                            pet = mglob(fullfile( ...
-                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz"));
-                            pet = pet(1);
-                        else
-                            continue
-                        end
-                        assert(isfile(pet))
-
-                        % applyXfm:  pet to atl
-                        concat_mat = fullfile(fileparts(t1w_on_pet), sprintf("%s_on_atl.mat", mybasename(t1w_on_pet)));
-                        flirt.concatXfm(AtoB=t1w_on_pet_on_t1w_mat, BtoC=t1w_on_atl_mat, AtoC=concat_mat);
-                        flirt.in = pet;
-                        flirt.init = concat_mat;
-                        flirt.out = myfileprefix(pet) + "_on_atl.nii.gz";
-                        flirt.ref = fullfile(getenv("FSLDIR"), "data", "standard", "MNI152_T1_1mm_brain.nii.gz");
-                        try
-                            flirt.applyXfm();
-                        catch ME
-                            handwarning(ME);
-                        end
-
-                        % flirt T1w to T1w_on_pet, only building xfm for use with Schaefer and other parcellations
-                        t1w_on_pet_mat = myfileprefix(t1w_on_pet) + ".mat";
-                        t1w_on_pet_mat_ = mlvg.Lee2025.register_t1w_to_t1w( ...
-                            in_fqfn, ...
-                            t1w_on_pet, ...
-                            out_tag=tracer, ...
-                            dof=6, ...
-                            noclobber=opts.noclobber);
-                        movefile(t1w_on_pet_mat_, t1w_on_pet_mat)
-
-                    catch ME1
-                        handwarning(ME1);
-                    end
-                end
-                
-                durations(idx) = toc;
-            end
-        end
-
         function durations = par_time_align(nii, opts)
             arguments
                 nii {mustBeText} = "sourcedata/sub-108007/ses-20210219143132/pet/sub-108007_ses-20210219143132_trc-oo_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz"
@@ -1896,6 +1679,125 @@ classdef Lee2025Par < handle & mlvg.Lee2025
             end
         end
         
+        function durations = serial_register_t1w_to_t1w(in_fqfns, opts)
+            %% having obtained robust coregistration of T1w to PET by t4_resolve,
+            %  now generate xfm files that are usable by flirt by flirting
+            %  T1w to T1w_on_PET.
+
+            arguments
+                in_fqfns {mustBeFile}
+                opts.tracers {mustBeText} = ["co", "oo", "ho", "fdg"]
+                opts.out_dir {mustBeFolder} = "/home/usr/jjlee/mnt/CHPC_scratch/Singularity/CCIR_01211"
+                opts.noclobber logical = true
+            end
+            assert(all(contains(in_fqfns, "_brain")))
+
+            ld_t1w_on_co = load(fullfile(opts.out_dir, "derivs_t1w_on_co.mat"));
+            ld_t1w_on_oo = load(fullfile(opts.out_dir, "derivs_t1w_on_oo_delay0.mat"));
+            ld_t1w_on_ho = load(fullfile(opts.out_dir, "derivs_t1w_on_ho.mat"));
+            ld_t1w_on_fdg = load(fullfile(opts.out_dir, "derivs_t1w_on_fdg_delay0.mat"));
+
+            durations = nan(1, numel(in_fqfns));
+
+            for idx = 1:numel(in_fqfns)
+                tic
+
+                % flirt in_fqfn on atl, only building xfm
+                in_fqfn = fullfile(opts.out_dir, in_fqfns(idx));
+                t1w_on_atl_mat = mlvg.Lee2025.register_t1w_to_t1w(in_fqfn, noclobber=true);
+
+                % per T1w, gather all T1w on pets
+                sub = extractAfter(extractBefore(in_fqfn, "/ses-"), "derivatives/");
+                t1ws_on_pet = [];
+                for trc = opts.tracers
+                    if contains(trc, "co", IgnoreCase=true)
+                        t1ws_on_pet = [t1ws_on_pet, ...
+                            ld_t1w_on_co.derivs_t1w_on_co(contains(ld_t1w_on_co.derivs_t1w_on_co, sub))];  %#ok<AGROW>
+                    end
+                    if contains(trc, "oo", IgnoreCase=true)
+                        t1ws_on_pet = [t1ws_on_pet, ...
+                            ld_t1w_on_oo.derivs_t1w_on_oo_delay0(contains(ld_t1w_on_oo.derivs_t1w_on_oo_delay0, sub))];  %#ok<AGROW>
+                    end
+                    if contains(trc, "ho", IgnoreCase=true)
+                        t1ws_on_pet = [t1ws_on_pet, ...
+                            ld_t1w_on_ho.derivs_t1w_on_ho(contains(ld_t1w_on_ho.derivs_t1w_on_ho, sub))];  %#ok<AGROW>
+                    end
+                    if contains(trc, "fdg", IgnoreCase=true)
+                        t1ws_on_pet = [t1ws_on_pet, ...
+                            ld_t1w_on_fdg.derivs_t1w_on_fdg_delay0(contains(ld_t1w_on_fdg.derivs_t1w_on_fdg_delay0, sub))];  %#ok<AGROW>
+                    end
+                end
+
+                for t1w_on_pet = t1ws_on_pet
+
+                    try                        
+                        assert(isfile(t1w_on_pet))
+
+                        % find surrogates for trc_co*Static and trc_oo*delay0*Static
+                        if contains(t1w_on_pet, "_trc-co_")
+                            tracer = "co";
+                            pet = mglob(fullfile( ...
+                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-co_*_mipt.nii.gz"));
+                            pet = pet(1);
+                        elseif contains(t1w_on_pet, "_trc-oo_")
+                            tracer = "oo";
+                            pet = mglob(fullfile( ...
+                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-oo_*delay0*_avgt.nii.gz"));
+                            pet = pet(1);
+                        elseif contains(t1w_on_pet, "_trc-ho_")
+                            tracer = "ho";
+                            pet = mglob(fullfile( ...
+                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-ho_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz"));
+                            pet = pet(1);
+                        elseif contains(t1w_on_pet, "_trc-fdg_")
+                            tracer = "fdg";
+                            pet = mglob(fullfile( ...
+                                fileparts(t1w_on_pet), "sub-*_ses-*_trc-fdg_proc-delay0-BrainMoCo2-createNiftiStatic.nii.gz"));
+                            pet = pet(1);
+                        else
+                            continue
+                        end
+                        assert(isfile(pet))
+
+                        % flirt T1w to T1w_on_pet, only building xfm for use with Schaefer and other parcellations
+                        t1w_on_pet_mat = myfileprefix(t1w_on_pet) + ".mat";
+                        t1w_on_pet_mat_ = mlvg.Lee2025.register_t1w_to_t1w( ...
+                            in_fqfn, ...
+                            t1w_on_pet, ...
+                            out_tag=tracer, ...
+                            dof=6, ...
+                            noclobber=opts.noclobber);
+                        movefile(t1w_on_pet_mat_, t1w_on_pet_mat)
+
+                        % flirt T1w_on_pet to T1w, only building xfm
+                        [t1w_on_pet_on_t1w_mat,flirt] = mlvg.Lee2025.register_t1w_to_t1w( ...
+                            t1w_on_pet, ...
+                            in_fqfn, ...
+                            out_tag="T1w", ...
+                            dof=6, ...
+                            noclobber=opts.noclobber);
+
+                        % applyXfm:  pet to atl
+                        concat_mat = fullfile(fileparts(t1w_on_pet), sprintf("%s_on_atl.mat", mybasename(t1w_on_pet)));
+                        flirt.concatXfm(AtoB=t1w_on_pet_on_t1w_mat, BtoC=t1w_on_atl_mat, AtoC=concat_mat);
+                        flirt.in = pet;
+                        flirt.init = concat_mat;
+                        flirt.out = myfileprefix(pet) + "_on_atl.nii.gz";
+                        flirt.ref = fullfile(getenv("FSLDIR"), "data", "standard", "MNI152_T1_1mm_brain.nii.gz");
+                        try
+                            flirt.applyXfm();
+                        catch ME
+                            handwarning(ME);
+                        end
+                    catch ME1
+                        handwarning(ME1);
+                    end
+                end
+                
+                durations(idx) = toc;
+            end
+        end
+
         function durations = serial_call_ifk(nii, opts)
             arguments
                 nii {mustBeText} = "sourcedata/sub-108014/ses-20220718114454/pet/sub-108014_ses-20220718114454_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames.nii.gz" 
