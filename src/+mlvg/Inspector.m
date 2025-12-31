@@ -23,10 +23,14 @@ classdef Inspector < handle
         indices_gm
         indices_wm  % no cerebellum
         indices_brainstem
+        indices_entorhinal
+        indices_hippocampus
         indices_cerebellum
         indices_csf
+        indices_striatum
         indices_subcortex  % no cerebellum
         indices_schaef  % 309 non-zero elements
+        indices_thalamus
         N_symmetric  % averaging LH with RH, e.g., 209
         N_notcort  % not cortical, e.g., 109
     end
@@ -47,6 +51,12 @@ classdef Inspector < handle
                 26, 28, 43, 44, 49, 50, 51, 52, ...
                 53, 54, 58, 60, 174];
         end
+        function g = get.indices_striatum(this)
+            g = [11, 12, 26, 50, 51, 58];
+        end
+        function g = get.indices_thalamus(this)
+            g = [10, 49];
+        end
         function g = get.indices_brainstem(this)
             g = 16;
         end
@@ -55,6 +65,12 @@ classdef Inspector < handle
         end
         function g = get.indices_csf(this)
             g = [4, 5, 14, 15, 24, 31, 43, 44, 63, 257];
+        end
+        function g = get.indices_entorhinal(this)
+            g = [1006, 2006];
+        end
+        function g = get.indices_hippocampus(this)
+            g = [17, 53];
         end
         function g = get.indices_schaef(this)
             if ~isempty(this.indices_schaef_)
@@ -586,7 +602,7 @@ classdef Inspector < handle
                     error("mlvg:ValueError", stackstr());
             end
         end
-    
+   
         function ifc = registered_schaefer(~, fqfn)
             % sub-108121_ses-20231030144329_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames-schaeffer.nii.gz
             g = mglob(fullfile(fileparts(fqfn), "sub-*_ses-*BrainMoCo2-createNiftiMovingAvgFrames-schaeffer.nii.gz"));
@@ -771,6 +787,45 @@ classdef Inspector < handle
                 end
             end            
         end
+
+        function ic = reduce_parc_schaefer(this, fqfn)
+            %% Starting from parcellated dynamic PET, 
+            %  e.g. sub-108347_ses-20250630115456_trc-fdg_proc-ParcSchaeffer-invariant-schaeffer-schaeffer-finite_timeAppend-11.nii.gz,
+            %  typically shaped 309 x N_t, reduce to new shape N_new_parc x N_t, N_new_parc << 309.
+
+            ifc = mlfourd.ImagingFormatContext2(fqfn);
+            ifc_ = copy(ifc);
+            N_t = size(ifc.img, 2);
+
+            % reorganize parcs
+            new_indices = { ...
+                this.indices_gm, this.indices_wm, this.indices_cerebellum, ...
+                this.indices_striatum, this.indices_thalamus, this.indices_hippocampus, this.indices_entorhinal};
+            N_new_parc = length(new_indices);
+            img = nan(N_new_parc, N_t);
+
+            % set weights per subject
+            ifc_schaef = this.registered_schaefer(fqfn);
+            img_schaef = ifc_schaef.img;
+            weights = nan(N_new_parc, 1);
+            for idx_idx = 1:N_new_parc
+                selection = ismember(img_schaef, new_indices{idx_idx});
+                weights(idx_idx) = sum(selection, "all");
+            end
+            weights = weights / sum(weights, "all");
+
+            % write ImagingFormatContext2
+            for idx_idx = 1:N_new_parc
+                selection = ascol(ismember(this.indices_schaef, new_indices{idx_idx}));
+                img(idx_idx, :) = weights(idx_idx) * mean(ifc.img(selection, :), 1);
+            end
+            ifc_.img = img;
+            fp = extractBefore(ifc_.fileprefix, "-invariant-schaeffer-schaeffer-finite") + "-reduced-to-" + N_new_parc;
+            ifc_.fileprefix = fp;
+            ifc_.save();
+            ic = mlfourd.ImagingContext2(ifc_);
+        end
+        
     end
 
     methods (Static)
@@ -1226,6 +1281,7 @@ classdef Inspector < handle
                 fontsize(scale=1.6)
             end
         end
+        
     end
 
     %% PRIVATE
