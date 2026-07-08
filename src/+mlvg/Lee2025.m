@@ -351,6 +351,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                 mat_file {mustBeFile} = fullfile( ...
                     getenv("SINGULARITY_HOME"), "CCIR_01211", "srcdata_co.mat")
                 opts.globbing_var = "srcdata_co"
+                opts.tags string = mlvg.Lee2025.PARC_SCHAEF_TAG + "-finite"
             end
 
             import mlkinetics.*
@@ -365,7 +366,7 @@ classdef Lee2025 < handle & mlsystem.IHandle
                     pth = strrep(pth, "sourcedata", "derivatives");
                     fp = extractBefore(fp, "-delay0-BrainMoCo2-createNiftiMovingAvgFrames");
 
-                    petSchaeferFqfn = fullfile(pth, fp + mlvg.Lee2025.PARC_SCHAEF_TAG + "-finite.nii.gz");
+                    petSchaeferFqfn = fullfile(pth, fp + opts.tags + ".nii.gz");
                     mipidifFqfn = fullfile(pth, fp + "-MipIdif-finite_idif.nii.gz");
                     mlvg.Lee2025.build_martin_v1(petSchaeferFqfn, mipidifFqfn);
                 catch ME

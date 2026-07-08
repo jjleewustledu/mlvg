@@ -146,7 +146,7 @@ classdef Inspector < handle
             assert(length(data_f) == length(data_oef))
 
             o2_content = this.load_matching_o2_content(oo);
-            data = data_f .* data_oef .* (data_v_post / 0.835) .* o2_content;
+            data = data_f .* data_oef .* o2_content;
             data = converter(data);
             dstruct = this.weighted_average(data, oo);  % 309 x Nses =: struct with fields wb, dmn, gm, wm, subcortex, each ~ 1 x Nses
             age = this.load_matching_age(oo);  % ~ 1 x Nses
@@ -443,7 +443,7 @@ classdef Inspector < handle
             %  Returned data selects measurement index, applies numerical conversions, and
             %  averages cortical lhs with rhs.  
             %  Returns:
-            %      data ~ 209 x N_ses
+            %      data ~ 209 x N_ses | data ~ N_parc x N_ses for N_parc < 300
 
             arguments
                 this mlvg.Inspector
@@ -466,7 +466,7 @@ classdef Inspector < handle
                 end
                 ifc = mlfourd.ImagingFormatContext2(fqfn);
                 N_parcels_ = size(ifc.img, 1);
-                if N_parcels_ ~= numel(this.indices_schaef)
+                if N_parcels_ > 300 && N_parcels_ ~= numel(this.indices_schaef)
                     fprintf("%s: %s has %g parcels\n", stackstr(), ifc.filename, N_parcels_);
                     ifc = this.repair_schaefer(ifc);
                 end
@@ -610,11 +610,28 @@ classdef Inspector < handle
             ifc = mlfourd.ImagingFormatContext2(g(1));
         end
 
+        function ifc = registered_schaefer2018_200parcels_7networks_order(~, fqfn)
+            % sub-108121_ses-20231030144329_trc-fdg_proc-delay0-BrainMoCo2-createNiftiMovingAvgFrames-schaeffer.nii.gz
+            pth = myfileparts(fqfn);
+            pth = extractBefore(pth, "/ses-");
+            g = mglob(fullfile(pth, "ses-*", "Parcellations", "Schaefer2018_200Parcels_7Networks_order", ...
+                "Schaefer2018_200Parcels_7Networks_order_T1_registered.nii.gz"));
+            assert(~isempty(g))
+            ifc = mlfourd.ImagingFormatContext2(g(1));
+        end
+
         function ifc = repair_schaefer(this, ifc, opts)
+            %% Adjusts ifc which has N_parcels slightly below|above that of this.indices_schaef,
+            %  which has N_parcels == 309.  ifc with N_parcels < 300 is returned untouched.
+
             arguments
                 this mlvg.Inspector
                 ifc mlfourd.ImagingFormatContext2
                 opts.do_replace_file logical = false
+            end
+
+            if numel(ifc.img) <= 300
+                return
             end
 
             try
@@ -788,49 +805,104 @@ classdef Inspector < handle
             end            
         end
 
-        function ic = reduce_parc_schaefer(this, fqfn)
+        function ic = reduce_parc_schaefer(this, fqfn, opts)
             %% Starting from parcellated dynamic PET, 
             %  e.g. sub-108347_ses-20250630115456_trc-fdg_proc-ParcSchaeffer-invariant-schaeffer-schaeffer-finite_timeAppend-11.nii.gz,
             %  typically shaped 309 x N_t, reduce to new shape N_new_parc x N_t, N_new_parc << 309.
 
-            ifc = mlfourd.ImagingFormatContext2(fqfn);
-            ifc_ = copy(ifc);
+            arguments
+                this mlvg.Inspector
+                fqfn {mustBeFile}
+                opts.N_new_parc {mustBeInteger} = 6
+            end
+
+            ifc = mlfourd.ImagingFormatContext2(fqfn);  % invariant Schaefer finite 309
+            ifc_ = copy(ifc);  % working copy
+            N_schaef_parc = size(ifc.img, 1);
             N_t = size(ifc.img, 2);
+            ifc_schaef_vxl = this.registered_schaefer(fqfn);  % specific to subject
+            img_schaef_vxl = ifc_schaef_vxl.img;
 
             % reorganize parcs
-            new_indices = { ...
-                this.indices_gm, this.indices_wm, this.indices_cerebellum, ...
-                this.indices_striatum, this.indices_thalamus, this.indices_hippocampus, this.indices_entorhinal};
-            N_new_parc = length(new_indices);
-            img = nan(N_new_parc, N_t);
-
-            % set weights per subject
-            ifc_schaef = this.registered_schaefer(fqfn);
-            img_schaef = ifc_schaef.img;
-            weights = nan(N_new_parc, 1);
-            for idx_idx = 1:N_new_parc
-                selection = ismember(img_schaef, new_indices{idx_idx});
-                weights(idx_idx) = sum(selection, "all");
+            switch opts.N_new_parc
+                case 6
+                    reorganized_indices = { ...
+                        this.indices_gm, this.indices_wm, this.indices_cerebellum, ...
+                        this.indices_striatum, this.indices_thalamus, this.indices_hippocampus};
+                    N_new_parc = length(reorganized_indices);
+                case 63
+                    sch = mlsurfer.Schaeffer.create( ...
+                        this.registered_schaefer2018_200parcels_7networks_order(fqfn));
+                    reorganized_indices = sch.curated_schaef_63.values;
+                    N_new_parc = length(reorganized_indices);
+                case 249
+                    sch = mlsurfer.Schaeffer.create( ...
+                        this.registered_schaefer2018_200parcels_7networks_order(fqfn));
+                    reorganized_indices = sch.curated_schaef_249.values;
+                    N_new_parc = length(reorganized_indices);
+                case 309
+                    ic = mlfourd.ImagingContext2(ifc_);
+                    return
+                otherwise
+                    error("mlvg:ValueError", stackstr())
             end
-            weights = weights / sum(weights, "all");
+
+            % construct reorganized weights for 309 parcels with FreeSurfer indices
+            reorganized_weights = cell(1, N_new_parc);  % row of cells containing parcellation weights;
+                                                        % each cell ~ N_schaef_parc x 1
+
+            %% correct, but nested looping is bottleneck
+            % for idx_new = 1:N_new_parc  % new anatomical groups
+            %     anatomical_group_indices = reorganized_indices{idx_new};
+            %     weights = zeros(N_schaef_parc, 1);
+            %     for idx_schaef = 1:N_schaef_parc
+            %         selected_voxels = ...
+            %             ismember(img_schaef_vxl, anatomical_group_indices) & ...
+            %             ismember(img_schaef_vxl, this.indices_schaef(idx_schaef));
+            %         weights(idx_schaef) = sum(selected_voxels, "all");
+            %     end
+            %     reorganized_weights{idx_new} = weights;
+            % end
+
+            %% unrolling loops with dynamic programming
+            img_schaef_vxl_in_schaef = false([size(img_schaef_vxl), N_schaef_parc]);
+            for idx_schaef = 1:N_schaef_parc
+                img_schaef_vxl_in_schaef(:,:,:,idx_schaef) = ...
+                    ismember(img_schaef_vxl, this.indices_schaef(idx_schaef));
+            end
+            for idx_new = 1:N_new_parc  % new anatomical groups
+                anatomical_group_indices = reorganized_indices{idx_new};
+                img_schaef_vxl_in_anatomical_group = ...
+                    repmat( ...
+                        ismember(img_schaef_vxl, anatomical_group_indices), ...
+                        [1, 1, 1, N_schaef_parc]);
+                selected_voxels = ...
+                    img_schaef_vxl_in_anatomical_group & ...
+                    img_schaef_vxl_in_schaef;  % logical ~ Nx x Ny x Nz x N_schaef_parc
+                reorganized_weights{idx_new} = squeeze(sum(selected_voxels, 1:3));  % numeric ~ 1 x N_schaef_parc
+            end
 
             % write ImagingFormatContext2
-            for idx_idx = 1:N_new_parc
-                selection = ascol(ismember(this.indices_schaef, new_indices{idx_idx}));
-                img(idx_idx, :) = weights(idx_idx) * mean(ifc.img(selection, :), 1);
+            img_new = nan(N_new_parc, N_t);
+            for idx_new = 1:N_new_parc
+                img_new(idx_new, :) = this.weighted_mean(ifc.img, reorganized_weights{idx_new});
             end
-            ifc_.img = img;
-            fp = extractBefore(ifc_.fileprefix, "-invariant-schaeffer-schaeffer-finite") + "-reduced-to-" + N_new_parc;
-            ifc_.fileprefix = fp;
+            ifc_.img = img_new;
+            suffix = extractAfter(ifc.fileprefix, "-invariant-schaeffer-schaeffer-finite");
+            fp = extractBefore(ifc.fileprefix, "-invariant-schaeffer-schaeffer-finite") + "-reduced-to-" + N_new_parc;
+            ifc_.fileprefix = fp + suffix;
             ifc_.save();
             ic = mlfourd.ImagingContext2(ifc_);
         end
-        
     end
 
     methods (Static)
 
         function inspect_martinv1(martinv1, opts)
+            % Works with concatenations of, e.g.,
+            % sub-108335_ses-20250519103158_trc-co_proc-ParcSchaeffer-invariant-schaeffer-schaeffer-finite-idif_martinv1.nii.gz,
+            % sub-108335_ses-20250519103158_trc-co_proc-ParcSchaeffer-reduced-to-7-idif_martinv1.nii.gz
+
             arguments
                 martinv1 {mustBeText}  % array of fqfn
                 opts.plot_style = "raincloud"
@@ -1123,16 +1195,16 @@ classdef Inspector < handle
 
             if strcmpi(opts.measure, "oef") && opts.fix_v_post
                 data_oef = this.load(oo, measure_index=1, converter=converter);
-                data_v_post = this.load(oo, measure_index=3, converter=converter);
-                data = data_oef .* data_v_post / 0.835;
+                % data_v_post = this.load(oo, measure_index=3, converter=converter);
+                data = data_oef;
             elseif strcmpi(opts.measure, "CMRO_2")
                 data_oef = this.load(oo, measure_index=1);
-                data_v_post = this.load(oo, measure_index=3);
+                % data_v_post = this.load(oo, measure_index=3);
                 data_f = this.load_matching_f(oo);
                 assert(length(data_f) == length(data_oef))
 
                 o2_content = this.load_matching_o2_content(oo);
-                data = data_f .* data_oef .* (data_v_post / 0.835) .* o2_content;
+                data = data_f .* data_oef .* o2_content;
                 data = converter(data);
             else
                 data = this.load(oo, measure_index=measure_index, converter=converter);
@@ -1282,6 +1354,21 @@ classdef Inspector < handle
             end
         end
         
+        function img_new = weighted_mean(img, weights)
+            %% (N_pos x N_times) \odot (N_pos x 1) -> 1 x N_times;
+            %  weights <- weights / \Sigma weights
+            
+            arguments
+                img {mustBeNumeric}
+                weights {mustBeNumeric}
+            end
+            weights = ascol(weights);
+            assert(size(img, 1) == size(weights, 1))  % N_schaef_parc
+            assert(1 == size(weights, 2))
+
+            weights = weights / sum(weights);
+            img_new = sum(weights .* img, 1);
+        end
     end
 
     %% PRIVATE
